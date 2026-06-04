@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Dumbbell, Flame, Moon, NotebookPen, Scale } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Dumbbell, Flame, Moon, NotebookPen, Scale } from 'lucide-react'
 import CardFrame from './CardFrame.jsx'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -52,10 +52,34 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
   const phase = getPhase(today)
   const week = getProgramWeek(today)
   const progStart = new Date(today.getFullYear(), 5, 3) // Jun 3 (Wed — block start)
+  const blockEnd = new Date(today.getFullYear(), 7, 10) // Aug 10 (block end)
 
   const { entries: journalEntries } = useJournal()
   const { entries: weightEntries, unit: weightUnit } = useWeight()
   const [selected, setSelected] = useState(null) // selected Date for the sheet
+
+  // Step the day-detail sheet to the previous/next day, clamped to the block.
+  const shiftSelected = (delta) =>
+    setSelected((cur) => {
+      if (!cur) return cur
+      const next = addDays(cur, delta)
+      return next < progStart || next > blockEnd ? cur : next
+    })
+
+  // Horizontal swipe inside the sheet moves between days.
+  const touch = useRef(null)
+  const onTouchStart = (e) => {
+    const t = e.touches[0]
+    touch.current = { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e) => {
+    if (!touch.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - touch.current.x
+    const dy = t.clientY - touch.current.y
+    touch.current = null
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftSelected(dx < 0 ? 1 : -1)
+  }
 
   // Completed days from Supabase; past non-rest days are placeholder-complete.
   const [completed, setCompleted] = useState(() => new Set())
@@ -196,6 +220,8 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
           side="bottom"
           className="rounded-t-3xl border-border bg-card max-h-[88dvh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
         >
           {selected && (
             <DayDetail
@@ -205,6 +231,10 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
               journalEntries={journalEntries}
               weightEntries={weightEntries}
               weightUnit={weightUnit}
+              onPrev={() => shiftSelected(-1)}
+              onNext={() => shiftSelected(1)}
+              canPrev={selected > progStart}
+              canNext={selected < blockEnd}
             />
           )}
         </SheetContent>
@@ -224,7 +254,18 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
   )
 }
 
-function DayDetail({ date, state, today, journalEntries, weightEntries, weightUnit }) {
+function DayDetail({
+  date,
+  state,
+  today,
+  journalEntries,
+  weightEntries,
+  weightUnit,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext,
+}) {
   const key = dayKey(date)
   const phase = getPhase(date)
   const week = getProgramWeek(date)
@@ -281,18 +322,26 @@ function DayDetail({ date, state, today, journalEntries, weightEntries, weightUn
   return (
     <>
       <SheetHeader className="px-5">
-        <div className="flex items-center justify-between gap-3">
-          <SheetTitle className="text-xl font-bold text-textPrimary">
-            {formatLongDate(date)}
-          </SheetTitle>
-          <span
-            className="rounded-full px-2.5 py-1 text-xs font-semibold"
-            style={{ color: status.color, backgroundColor: `${status.color}1f` }}
-          >
-            {status.label}
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <DayNavButton aria-label="Previous day" disabled={!canPrev} onClick={onPrev}>
+            <ChevronLeft />
+          </DayNavButton>
+          <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+            <SheetTitle className="truncate text-xl font-bold text-textPrimary">
+              {formatLongDate(date)}
+            </SheetTitle>
+            <span
+              className="mt-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+              style={{ color: status.color, backgroundColor: `${status.color}1f` }}
+            >
+              {status.label}
+            </span>
+          </div>
+          <DayNavButton aria-label="Next day" disabled={!canNext} onClick={onNext}>
+            <ChevronRight />
+          </DayNavButton>
         </div>
-        <SheetDescription className="text-textMuted">
+        <SheetDescription className="text-center text-textMuted">
           Phase {phase.id} · Week {week} of 10
         </SheetDescription>
       </SheetHeader>
@@ -380,6 +429,24 @@ function DayDetail({ date, state, today, journalEntries, weightEntries, weightUn
         </Section>
       </div>
     </>
+  )
+}
+
+// Round chevron to step the day-detail sheet one day at a time.
+function DayNavButton({ children, disabled, onClick, ...props }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'grid size-9 flex-shrink-0 place-content-center rounded-full bg-secondary/80 text-foreground transition',
+        'hover:bg-secondary disabled:opacity-30 disabled:hover:bg-secondary/80 [&_svg]:size-5',
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }
 
