@@ -45,13 +45,15 @@ function num(v) {
  * (nutrition_logs, prototype mode — text user_id, no RLS) is the source of
  * truth. Returns running totals and the shared macro goals.
  */
-export function useNutrition() {
-  const date = todayKey()
+export function useNutrition(date = todayKey()) {
   const [logs, setLogs] = useState(() => readLocal(date))
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let active = true
+    // Show the selected day's cached logs immediately, then reconcile with the
+    // server so switching days doesn't briefly show the previous day's totals.
+    setLogs(readLocal(date))
     ;(async () => {
       const { data, error } = await supabase
         .from('nutrition_logs')

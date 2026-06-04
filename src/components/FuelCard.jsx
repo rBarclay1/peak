@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Flame, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Flame, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import CardFrame from './CardFrame.jsx'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { dayKey } from '../lib/date'
 import { useNutrition } from '../hooks/useNutrition'
 import { useSavedFoods } from '../hooks/useSavedFoods'
 
@@ -36,15 +37,39 @@ function defaultMealType() {
 }
 
 export default function FuelCard({ expandedId, onExpand, onCollapse }) {
-  const { logs, totals, goals, addLog, removeLog } = useNutrition()
-  const { foods, saveFood, removeFood } = useSavedFoods()
-  const [mode, setMode] = useState('view') // 'view' | 'add'
   const isExpanded = expandedId === 'fuel'
+  const [mode, setMode] = useState('view') // 'view' | 'add'
+  const [dayOffset, setDayOffset] = useState(0) // 0 = today
 
-  // Reset to the log view whenever the card collapses.
+  // The day being logged/viewed. Bounded to the block start … today (no future).
+  const today = new Date()
+  const viewDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset)
+  const dateKey = dayKey(viewDate)
+  const blockStart = new Date(today.getFullYear(), 5, 3) // Jun 3
+  const atStart = viewDate <= blockStart
+
+  const { logs, totals, goals, addLog, removeLog } = useNutrition(dateKey)
+  const { foods, saveFood, removeFood } = useSavedFoods()
+
+  // Reset to the log view and today whenever the card collapses.
   useEffect(() => {
-    if (!isExpanded) setMode('view')
+    if (!isExpanded) {
+      setMode('view')
+      setDayOffset(0)
+    }
   }, [isExpanded])
+
+  const shiftDay = (delta) => {
+    const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset + delta)
+    if (next < blockStart || next > today) return
+    setDayOffset((o) => o + delta)
+  }
+  const dayLabel =
+    dayOffset === 0
+      ? 'Today'
+      : dayOffset === -1
+        ? 'Yesterday'
+        : viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   const proteinLeft = Math.max(0, goals.protein - totals.protein)
 
@@ -94,12 +119,49 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         onSaveFood={saveFood}
         onRemoveSaved={removeFood}
         onDone={() => setMode('view')}
+        dayLabel={dayLabel}
       />
     ) : (
       <div>
-        <h1 className="text-3xl font-bold text-textPrimary">Fuel</h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-3xl font-bold text-textPrimary">Fuel</h1>
+          <div className="flex items-center gap-1">
+            {dayOffset !== 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDayOffset(0)
+                }}
+                className="mr-1 rounded-full px-2.5 py-1 text-xs font-semibold text-textMuted transition hover:text-textPrimary"
+              >
+                Today
+              </button>
+            )}
+            <DayNavButton
+              aria-label="Previous day"
+              disabled={atStart}
+              onClick={(e) => {
+                e.stopPropagation()
+                shiftDay(-1)
+              }}
+            >
+              <ChevronLeft />
+            </DayNavButton>
+            <DayNavButton
+              aria-label="Next day"
+              disabled={dayOffset >= 0}
+              onClick={(e) => {
+                e.stopPropagation()
+                shiftDay(1)
+              }}
+            >
+              <ChevronRight />
+            </DayNavButton>
+          </div>
+        </div>
         <p className="mt-1.5 text-[15px] font-medium text-textSecondary">
-          {r0(totals.calories).toLocaleString()} / {goals.calories.toLocaleString()} kcal today
+          {r0(totals.calories).toLocaleString()} / {goals.calories.toLocaleString()} kcal · {dayLabel}
         </p>
 
         {/* Hero rings */}
@@ -152,7 +214,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         {/* Today's meals */}
         <div className="mt-10">
           <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-3">
-            Today&apos;s meals
+            {dayOffset === 0 ? "Today's meals" : 'Meals'}
           </h2>
           {logs.length === 0 ? (
             <Card className="bg-card py-10 text-center text-muted-foreground">No meals logged yet</Card>
@@ -195,7 +257,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
 }
 
 // ── Add-food flow: quick-tap saved foods + manual macro entry ──────────────
-function AddFood({ savedFoods, onLog, onSaveFood, onRemoveSaved, onDone }) {
+function AddFood({ savedFoods, onLog, onSaveFood, onRemoveSaved, onDone, dayLabel }) {
   const [name, setName] = useState('')
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
@@ -281,7 +343,10 @@ function AddFood({ savedFoods, onLog, onSaveFood, onRemoveSaved, onDone }) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-textPrimary">Add food</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-textPrimary">Add food</h1>
+          {dayLabel && <p className="text-sm text-textMuted">{dayLabel}</p>}
+        </div>
         <Button
           type="button"
           variant="secondary"
@@ -503,6 +568,24 @@ function MealRow({ log, onRemove }) {
         </button>
       </div>
     </li>
+  )
+}
+
+// Round chevron used to step the Fuel view one day at a time.
+function DayNavButton({ children, disabled, onClick, ...props }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'grid size-8 place-content-center rounded-full bg-secondary/80 text-foreground transition',
+        'hover:bg-secondary disabled:opacity-30 disabled:hover:bg-secondary/80 [&_svg]:size-5',
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }
 
