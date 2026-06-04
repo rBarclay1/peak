@@ -180,7 +180,11 @@ function climbDetail(plan, phase) {
 }
 
 function runDetail(phase) {
-  return phase.id === 'III' ? 'Easy run · recovery first' : 'Easy Zone 2 · conversational pace'
+  // Phase I is the volume block — every run stays fully aerobic. Once strength
+  // and send phases begin, runs go 80/20: a Zone 2 base with a Zone 4–5 dose.
+  return phase.id === 'I'
+    ? 'All Zone 2 · conversational pace'
+    : '80% Zone 2 · 20% Zone 4–5 efforts'
 }
 
 /**
@@ -191,9 +195,11 @@ export function getChecklist({ session, phase, date }) {
   const { accessory, week, plan } = daySpec(date)
 
   if (session.type === 'restrun') {
+    // Phase I runs are pure Zone 2; later phases mix in Zone 4–5 (80/20).
+    const runLabel = phase.id === 'I' ? 'Zone 2 Run' : 'Run · Z2 + Z4–5'
     return {
       kind: 'list',
-      items: [{ key: 'zone2-run', label: 'Zone 2 Run', detail: runDetail(phase) }],
+      items: [{ key: 'zone2-run', label: runLabel, detail: runDetail(phase) }],
     }
   }
 
@@ -235,7 +241,7 @@ export function getDayFocus({ session, phase }) {
     case 'gym':
       return 'Bench, chest & core'
     case 'restrun':
-      return 'Active recovery · easy run'
+      return phase.id === 'I' ? 'Active recovery · easy run' : 'Aerobic base + short intensity'
     default:
       return ''
   }
