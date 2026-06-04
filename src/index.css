@@ -80,6 +80,7 @@
   body {
     height: 100vh; /* fallback for browsers without dvh */
     height: 100dvh;
+    height: -webkit-fill-available; /* iOS: fill the real available height */
     overflow: hidden;
     overscroll-behavior: none;
   }
@@ -87,6 +88,7 @@
   #root {
     height: 100vh;
     height: 100dvh;
+    height: -webkit-fill-available;
     width: 100%;
   }
 
