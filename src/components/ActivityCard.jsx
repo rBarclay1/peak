@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, Moon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Moon } from 'lucide-react'
 import CardFrame from './CardFrame.jsx'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,6 @@ import {
   getPhase,
   getSession,
   getProgramWeek,
-  getPhaseProgress,
   getChecklist,
   getDayFocus,
   formatMediumDate,
@@ -18,12 +17,54 @@ import { useTrainingSession } from '../hooks/useTrainingSession'
 import { dayKey } from '../lib/date'
 
 export default function ActivityCard({ date, expandedId, onExpand, onCollapse }) {
-  const phase = getPhase(date)
-  const session = getSession(date)
-  const week = getProgramWeek(date)
-  const checklist = getChecklist({ session, phase, date })
-  const phaseProgress = getPhaseProgress(date, phase)
-  const dateKey = dayKey(date)
+  const isExpanded = expandedId === 'activity'
+
+  // Day browsing: 0 = today. Swipe (or the chevrons) shifts which day the
+  // expanded view shows. Reset to today whenever the card closes so it always
+  // reopens on the current day.
+  const [offsetDays, setOffsetDays] = useState(0)
+  useEffect(() => {
+    if (!isExpanded) setOffsetDays(0)
+  }, [isExpanded])
+
+  // The block runs Jun 3 – Aug 10; clamp browsing to those bounds.
+  const blockStart = new Date(date.getFullYear(), 5, 3)
+  const blockEnd = new Date(date.getFullYear(), 7, 10)
+  const viewDate = useMemo(
+    () => new Date(date.getFullYear(), date.getMonth(), date.getDate() + offsetDays),
+    [date, offsetDays],
+  )
+  const atStart = viewDate <= blockStart
+  const atEnd = viewDate >= blockEnd
+
+  const shiftDay = (delta) => {
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + offsetDays + delta)
+    if (next < blockStart || next > blockEnd) return
+    setOffsetDays((o) => o + delta)
+  }
+
+  // Horizontal swipe → change day; ignore mostly-vertical drags (scrolling).
+  const touch = useRef(null)
+  const onTouchStart = (e) => {
+    const t = e.touches[0]
+    touch.current = { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e) => {
+    if (!touch.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - touch.current.x
+    const dy = t.clientY - touch.current.y
+    touch.current = null
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      shiftDay(dx < 0 ? 1 : -1) // swipe left → next day, right → previous
+    }
+  }
+
+  const phase = getPhase(viewDate)
+  const session = getSession(viewDate)
+  const week = getProgramWeek(viewDate)
+  const checklist = getChecklist({ session, phase, date: viewDate })
+  const dateKey = dayKey(viewDate)
 
   const { completedItems, completed, toggleItem, markComplete } = useTrainingSession(
     dateKey,
@@ -83,12 +124,48 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
   )
 
   const expanded = (
-    <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Badge className="font-semibold">Phase {phase.id}</Badge>
-        <span className="text-sm text-muted-foreground">
-          Week {week} · {formatMediumDate(date)}
-        </span>
+    <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="select-none">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge className="font-semibold">Phase {phase.id}</Badge>
+          <span className="truncate text-sm text-muted-foreground">
+            Week {week} · {formatMediumDate(viewDate)}
+          </span>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {offsetDays !== 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setOffsetDays(0)
+              }}
+              className="mr-1 rounded-full px-2.5 py-1 text-xs font-semibold text-textMuted transition hover:text-textPrimary"
+            >
+              Today
+            </button>
+          )}
+          <DayNavButton
+            aria-label="Previous day"
+            disabled={atStart}
+            onClick={(e) => {
+              e.stopPropagation()
+              shiftDay(-1)
+            }}
+          >
+            <ChevronLeft />
+          </DayNavButton>
+          <DayNavButton
+            aria-label="Next day"
+            disabled={atEnd}
+            onClick={(e) => {
+              e.stopPropagation()
+              shiftDay(1)
+            }}
+          >
+            <ChevronRight />
+          </DayNavButton>
+        </div>
       </div>
       <h1 className="font-display text-5xl font-extrabold tracking-tight text-textPrimary">
         {session.label}
@@ -166,6 +243,24 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
       preview={preview}
       expanded={expanded}
     />
+  )
+}
+
+// Round chevron used to step the expanded Activity view one day at a time.
+function DayNavButton({ children, disabled, onClick, ...props }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'grid size-8 place-content-center rounded-full bg-secondary/80 text-foreground transition',
+        'hover:bg-secondary disabled:opacity-30 disabled:hover:bg-secondary/80 [&_svg]:size-5',
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }
 
