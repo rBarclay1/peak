@@ -13,7 +13,6 @@ export const EDGE_BACK_ZONE = 28
 // header). Inset + opacity + border-radius all transition over 300ms.
 const G = 'var(--gap)'
 const HALF = 'var(--half)'
-const SAFE_B = 'env(safe-area-inset-bottom)'
 
 // Asymmetric grid above a full-width Weight strip (bottom 16.67%):
 //   Left  (Activity / Fuel)               → 2 rows, ~41.67% height each
@@ -28,7 +27,7 @@ const POSITIONS = {
   journal: { top: `calc(33.3333% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(41.6667% + ${HALF})` },
   calendar: { top: `calc(58.3333% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(16.6667% + ${HALF})` },
   // Full-width bottom strip
-  weight: { top: `calc(83.3333% + ${HALF})`, left: G, right: G, bottom: `calc(${G} + ${SAFE_B})` },
+  weight: { top: `calc(83.3333% + ${HALF})`, left: G, right: G, bottom: G },
 }
 
 const EXPANDED = { top: 0, left: 0, right: 0, bottom: 0 }
