@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Flame, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
-import CardFrame from './CardFrame.jsx'
+import CardFrame, { EDGE_BACK_ZONE } from './CardFrame.jsx'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -71,6 +71,22 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         ? 'Yesterday'
         : viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
+  // Horizontal swipe changes the day; the far-left edge is left to the card's
+  // back gesture, and mostly-vertical drags (scrolling) are ignored.
+  const touch = useRef(null)
+  const onTouchStart = (e) => {
+    const t = e.touches[0]
+    touch.current = t.clientX <= EDGE_BACK_ZONE ? null : { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e) => {
+    if (!touch.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - touch.current.x
+    const dy = t.clientY - touch.current.y
+    touch.current = null
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftDay(dx < 0 ? 1 : -1)
+  }
+
   const proteinLeft = Math.max(0, goals.protein - totals.protein)
 
   const preview = (
@@ -122,7 +138,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         dayLabel={dayLabel}
       />
     ) : (
-      <div>
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-3xl font-bold text-textPrimary">Fuel</h1>
           <div className="flex items-center gap-1">
