@@ -99,6 +99,10 @@
 
   /* Hide scrollbars everywhere — clean field-notebook surfaces */
   html {
+    /* The root element's background paints the whole viewport canvas, so this
+       backs any strip the fixed-height app doesn't cover (e.g. the iOS Safari
+       bar) with the app's dark instead of black. SummerShowdown does the same. */
+    background-color: var(--color-background);
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
