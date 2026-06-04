@@ -62,10 +62,30 @@ export function useJournal() {
         .eq('user_id', PLACEHOLDER_USER)
         .order('created_at', { ascending: false })
 
-      if (!active || error || !data) return
-      const normalized = normalizeDates(data)
-      setEntries(normalized)
-      writeLocal(normalized)
+      if (!active || error) return // table missing → keep localStorage
+
+      if (data.length) {
+        const normalized = normalizeDates(data)
+        setEntries(normalized)
+        writeLocal(normalized)
+      } else {
+        // Server empty (e.g. table just created) → push local entries up once
+        // instead of overwriting them with nothing.
+        const local = normalizeDates(readLocal())
+        if (local.length) {
+          const { data: inserted } = await supabase
+            .from('journal_entries')
+            .insert(local.map((e) => ({ user_id: PLACEHOLDER_USER, date: e.date, entry_text: e.entry_text })))
+            .select('id, date, entry_text, created_at')
+          if (active && inserted) {
+            const norm = normalizeDates(inserted).sort((a, b) =>
+              a.created_at < b.created_at ? 1 : -1,
+            )
+            setEntries(norm)
+            writeLocal(norm)
+          }
+        }
+      }
     })()
     return () => {
       active = false

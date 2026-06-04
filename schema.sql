@@ -212,3 +212,35 @@ drop policy if exists "Owner access" on public.saved_meals;
 alter table public.saved_meals disable row level security;
 alter table public.saved_meals
   alter column user_id type text using user_id::text;
+
+-- ===========================================================================
+-- weight_log (prototype mode — text user_id, RLS off). One row per day.
+-- ===========================================================================
+create table if not exists public.weight_log (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     text not null,
+  date        date not null,
+  weight      numeric(6, 2) not null,
+  unit        text not null default 'lb',
+  created_at  timestamptz not null default now(),
+  unique (user_id, date)
+);
+alter table public.weight_log disable row level security;
+create index if not exists weight_log_user_date_idx
+  on public.weight_log (user_id, date);
+
+-- ===========================================================================
+-- logged_activities (prototype mode — text user_id, RLS off). Ad-hoc
+-- activities the user logs manually (e.g. an unplanned run), many per day.
+-- ===========================================================================
+create table if not exists public.logged_activities (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     text not null,
+  date        date not null,
+  name        text not null,
+  type        text not null default 'other',
+  created_at  timestamptz not null default now()
+);
+alter table public.logged_activities disable row level security;
+create index if not exists logged_activities_user_date_idx
+  on public.logged_activities (user_id, date);
