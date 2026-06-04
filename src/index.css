@@ -98,6 +98,20 @@
     margin: 0;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Native-app feel: no text selection, no iOS long-press callout/magnifier,
+       no tap highlight. Inputs re-enable selection below so typing still works. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Keep selection/editing inside form fields. */
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   /* Hide scrollbars everywhere — clean field-notebook surfaces */
