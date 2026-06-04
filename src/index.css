@@ -126,3 +126,14 @@
     @apply bg-surface border border-border rounded-card;
   }
 }
+
+/* One full turn for the Fuel rings on expand (they're already filled, so they
+   spin rather than re-fill). Base rotation is -90deg so the arc starts at top. */
+@keyframes ring-spin {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}

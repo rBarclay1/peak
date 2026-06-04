@@ -506,23 +506,25 @@ function MealRow({ log, onRemove }) {
   )
 }
 
-// SVG progress ring with an animated fill.
+// SVG progress ring. The arc shows its final fill immediately; when `animate`
+// is set (e.g. on expand) the whole ring spins one full turn instead of
+// re-filling — the preview already shows it filled. The fill itself still
+// transitions smoothly when the underlying totals change.
 function Ring({ size, stroke, pct, color, animate, children }) {
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
-  const [p, setP] = useState(animate ? 0 : pct)
-  useEffect(() => {
-    if (!animate) {
-      setP(pct)
-      return
-    }
-    const t = requestAnimationFrame(() => setP(pct))
-    return () => cancelAnimationFrame(t)
-  }, [pct, animate])
+  const offset = c * (1 - Math.min(1, pct / 100))
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+      <svg
+        width={size}
+        height={size}
+        style={{
+          transform: 'rotate(-90deg)',
+          animation: animate ? 'ring-spin 0.9s cubic-bezier(0.22, 1, 0.36, 1)' : undefined,
+        }}
+      >
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2c2c2e" strokeWidth={stroke} />
         <circle
           cx={size / 2}
@@ -533,7 +535,7 @@ function Ring({ size, stroke, pct, color, animate, children }) {
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
-          strokeDashoffset={c * (1 - Math.min(1, p / 100))}
+          strokeDashoffset={offset}
           style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1)' }}
         />
       </svg>
