@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Moon, RefreshCw } from 'lucide-react'
-import CardFrame from './CardFrame.jsx'
+import { ChevronLeft, ChevronRight, Moon, RefreshCw } from 'lucide-react'
+import CardFrame, { EDGE_BACK_ZONE } from './CardFrame.jsx'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { dayKey } from '../lib/date'
 import { computeRecovery } from '../lib/training'
 import { useGarmin } from '../hooks/useGarmin'
 
@@ -36,12 +37,90 @@ function stagesFromRow(row) {
   return stages.length ? stages : null
 }
 
+// Display values for one Garmin row's sleep; null when the day has no sleep.
+function deriveSleep(row) {
+  if (!row || row.sleep_score == null) return null
+  const sleepScore = Math.round(row.sleep_score)
+  const hrv = row.hrv_score != null ? Math.round(row.hrv_score) : null
+  const stages = stagesFromRow(row)
+  const totalMin = stages
+    ? stages.reduce((s, x) => s + x.min, 0)
+    : row.sleep_duration_hours != null
+      ? Math.round(row.sleep_duration_hours * 60)
+      : null
+  const recovery = hrv != null ? computeRecovery(hrv, sleepScore) : null
+  const tier = sleepTier(sleepScore)
+  return { sleepScore, hrv, stages, totalMin, recovery, tier }
+}
+
+// Round chevron used to step the expanded Sleep view one day at a time.
+function DayNavButton({ children, disabled, onClick, ...props }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'grid size-8 place-content-center rounded-full bg-secondary/80 text-foreground transition',
+        'hover:bg-secondary disabled:opacity-30 disabled:hover:bg-secondary/80 [&_svg]:size-5',
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
   const { rows, refetch } = useGarmin()
-  const latest = rows.length ? rows[rows.length - 1] : null
-  const isLive = !!(latest && latest.sleep_score != null)
+  const isExpanded = expandedId === 'recovery'
 
-  if (!isLive) {
+  // Day browsing in the expanded view. 0 = today; reset on collapse.
+  const [dayOffset, setDayOffset] = useState(0)
+  useEffect(() => {
+    if (!isExpanded) setDayOffset(0)
+  }, [isExpanded])
+
+  const today = new Date()
+  const viewDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset)
+  const blockStart = new Date(today.getFullYear(), 5, 3) // Jun 3
+  const atStart = viewDate <= blockStart
+  const shiftDay = (delta) => {
+    const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset + delta)
+    if (next < blockStart || next > today) return
+    setDayOffset((o) => o + delta)
+  }
+  const dayLabel =
+    dayOffset === 0
+      ? 'Today'
+      : dayOffset === -1
+        ? 'Yesterday'
+        : viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
+  // Horizontal swipe changes the day; the far-left edge is left to the card's
+  // back gesture, and mostly-vertical drags (scrolling) are ignored.
+  const touch = useRef(null)
+  const onTouchStart = (e) => {
+    const t = e.touches[0]
+    touch.current = t.clientX <= EDGE_BACK_ZONE ? null : { x: t.clientX, y: t.clientY }
+  }
+  const onTouchEnd = (e) => {
+    if (!touch.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - touch.current.x
+    const dy = t.clientY - touch.current.y
+    touch.current = null
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftDay(dx < 0 ? 1 : -1)
+  }
+
+  const sleepRows = rows.filter((r) => r.sleep_score != null)
+  const previewData = sleepRows.length ? deriveSleep(sleepRows[sleepRows.length - 1]) : null
+  const cur = deriveSleep(rows.find((r) => r.date === dayKey(viewDate)) || null)
+  const trend = sleepRows
+    .slice(-7)
+    .map((r) => ({ score: Math.round(r.sleep_score), day: weekdayLabel(r.date) }))
+
+  if (!previewData) {
     const empty = (
       <div className="h-full flex flex-col">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -55,17 +134,16 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
     )
     const emptyExpanded = (
       <div>
-        <h1 className="text-3xl font-bold text-textPrimary">Sleep</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-textPrimary">Sleep</h1>
+          <GarminSync onSynced={refetch} label="Sync now" />
+        </div>
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <Moon className="size-10 text-textMuted" />
           <p className="text-base font-medium text-textSecondary">No sleep data yet</p>
           <p className="max-w-[18rem] text-sm text-textMuted">
-            Sync your Garmin to see sleep, HRV, and recovery here. Run{' '}
-            <span className="font-mono text-textSecondary">scripts/garmin_sync.py</span>.
+            Sync your Garmin to see sleep, HRV, and recovery here.
           </p>
-          <div className="mt-4">
-            <GarminSync onSynced={refetch} label="Sync now" />
-          </div>
         </div>
       </div>
     )
@@ -81,20 +159,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
     )
   }
 
-  const sleepScore = Math.round(latest.sleep_score)
-  const hrv = latest.hrv_score != null ? Math.round(latest.hrv_score) : null
-  const stages = stagesFromRow(latest)
-  const totalMin = stages
-    ? stages.reduce((s, x) => s + x.min, 0)
-    : latest.sleep_duration_hours != null
-      ? Math.round(latest.sleep_duration_hours * 60)
-      : null
-  const recovery = hrv != null ? computeRecovery(hrv, sleepScore) : null
-  const tier = sleepTier(sleepScore)
-  const trend = rows
-    .filter((r) => r.sleep_score != null)
-    .slice(-7)
-    .map((r) => ({ score: Math.round(r.sleep_score), day: weekdayLabel(r.date) }))
+  const { sleepScore, hrv, stages, totalMin, recovery, tier } = previewData
 
   const preview = (
     <div className="h-full flex flex-col">
@@ -140,39 +205,94 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
   )
 
   const expanded = (
-    <div>
+    <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-textPrimary">Sleep</h1>
         <GarminSync onSynced={refetch} />
       </div>
 
-      <div className="mt-4 flex items-end gap-3">
-        <span className="font-display text-7xl font-extrabold leading-none tracking-tight text-textPrimary">
-          {sleepScore}
-        </span>
-        <div className="mb-1.5">
-          <div className="text-lg font-semibold" style={{ color: tier.color }}>
-            {tier.label}
-          </div>
-          {totalMin != null && <div className="text-sm text-textMuted">{fmtDur(totalMin)} in bed</div>}
-        </div>
+      {/* Day navigation */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <DayNavButton
+          aria-label="Previous day"
+          disabled={atStart}
+          onClick={(e) => {
+            e.stopPropagation()
+            shiftDay(-1)
+          }}
+        >
+          <ChevronLeft />
+        </DayNavButton>
+        <button
+          type="button"
+          disabled={dayOffset === 0}
+          onClick={(e) => {
+            e.stopPropagation()
+            setDayOffset(0)
+          }}
+          className="text-sm font-semibold text-textSecondary transition hover:text-textPrimary disabled:text-textMuted"
+        >
+          {dayLabel}
+        </button>
+        <DayNavButton
+          aria-label="Next day"
+          disabled={dayOffset >= 0}
+          onClick={(e) => {
+            e.stopPropagation()
+            shiftDay(1)
+          }}
+        >
+          <ChevronRight />
+        </DayNavButton>
       </div>
 
-      {/* Sleep stages */}
-      {stages && totalMin ? (
-        <div className="mt-7">
-          <StagesBar stages={stages} total={totalMin} className="h-4" />
-          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
-            {stages.map((s) => (
-              <div key={s.key} className="flex items-center gap-2">
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: STAGE_COLORS[s.key] }} />
-                <span className="flex-1 text-sm text-textSecondary">{s.key}</span>
-                <span className="stat text-sm text-textPrimary">{fmtDur(s.min)}</span>
+      {cur ? (
+        <>
+          <div className="mt-5 flex items-end gap-3">
+            <span className="font-display text-7xl font-extrabold leading-none tracking-tight text-textPrimary">
+              {cur.sleepScore}
+            </span>
+            <div className="mb-1.5">
+              <div className="text-lg font-semibold" style={{ color: cur.tier.color }}>
+                {cur.tier.label}
               </div>
-            ))}
+              {cur.totalMin != null && (
+                <div className="text-sm text-textMuted">{fmtDur(cur.totalMin)} in bed</div>
+              )}
+            </div>
           </div>
+
+          {/* Sleep stages */}
+          {cur.stages && cur.totalMin ? (
+            <div className="mt-7">
+              <StagesBar stages={cur.stages} total={cur.totalMin} className="h-4" />
+              <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
+                {cur.stages.map((s) => (
+                  <div key={s.key} className="flex items-center gap-2">
+                    <span className="size-2.5 rounded-full" style={{ backgroundColor: STAGE_COLORS[s.key] }} />
+                    <span className="flex-1 text-sm text-textSecondary">{s.key}</span>
+                    <span className="stat text-sm text-textPrimary">{fmtDur(s.min)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Secondary stats */}
+          <div className="mt-9 grid grid-cols-2 gap-3">
+            {cur.recovery != null && <StatCard label="Recovery" value={String(cur.recovery)} />}
+            {cur.hrv != null && <StatCard label="HRV" value={`${cur.hrv}ms`} />}
+          </div>
+        </>
+      ) : (
+        <div className="mt-12 flex flex-col items-center gap-3 text-center">
+          <Moon className="size-10 text-textMuted" />
+          <p className="text-base font-medium text-textSecondary">No sleep logged</p>
+          <p className="text-sm text-textMuted">
+            Nothing for {dayLabel.toLowerCase()} — swipe to another day or sync.
+          </p>
         </div>
-      ) : null}
+      )}
 
       {/* 7-night trend */}
       {trend.length >= 2 && (
@@ -183,12 +303,6 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
           <SleepTrend data={trend} color={tier.color} />
         </div>
       )}
-
-      {/* Secondary stats */}
-      <div className="mt-9 grid grid-cols-2 gap-3">
-        {recovery != null && <StatCard label="Recovery" value={String(recovery)} />}
-        {hrv != null && <StatCard label="HRV" value={`${hrv}ms`} />}
-      </div>
 
       <p className="mt-9 text-xs text-textMuted">Synced from Garmin Connect</p>
     </div>
