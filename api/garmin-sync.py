@@ -167,3 +167,13 @@ class handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True, **result})
         except Exception as e:  # noqa: BLE001 — surface any failure as JSON
             self._send(500, {"ok": False, "error": str(e)})
+
+    def do_POST(self):
+        # User-initiated sync from the app (the cron uses GET + CRON_SECRET).
+        # No secret here so the button works from the browser; it only pulls
+        # Garmin data into Supabase, so the worst a stray call does is re-sync.
+        try:
+            result = run_sync(3)
+            self._send(200, {"ok": True, **result})
+        except Exception as e:  # noqa: BLE001 — surface any failure as JSON
+            self._send(500, {"ok": False, "error": str(e)})
