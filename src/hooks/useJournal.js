@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { todayKey } from '../lib/date'
+import { dayKey, todayKey } from '../lib/date'
 
 const PLACEHOLDER_USER = 'placeholder-user'
 const LS_KEY = 'peak:journal'
@@ -21,14 +21,37 @@ function writeLocal(entries) {
   }
 }
 
+// One-time fix for entries written before the local-date switch: an entry's
+// real day is the local date of its created_at, not whatever (UTC-derived) date
+// got stored. Entries are always created "today", so this is lossless — it only
+// shifts rows whose stored date disagrees with their timestamp. Idempotent.
+function normalizeDates(entries) {
+  let changed = false
+  const next = entries.map((e) => {
+    if (!e.created_at) return e
+    const local = dayKey(new Date(e.created_at))
+    if (local !== e.date) {
+      changed = true
+      return { ...e, date: local }
+    }
+    return e
+  })
+  return changed ? next : entries
+}
+
 /**
  * Journal entries, newest first. localStorage is the reliable layer; Supabase
  * is the source of truth once the journal_entries table exists (it has no RLS
  * in prototype mode, so the placeholder user can read/write directly).
  */
 export function useJournal() {
-  const [entries, setEntries] = useState(() => readLocal())
+  const [entries, setEntries] = useState(() => normalizeDates(readLocal()))
   const [saving, setSaving] = useState(false)
+
+  // Persist the local-date normalization back to storage on mount.
+  useEffect(() => {
+    writeLocal(normalizeDates(readLocal()))
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -40,8 +63,9 @@ export function useJournal() {
         .order('created_at', { ascending: false })
 
       if (!active || error || !data) return
-      setEntries(data)
-      writeLocal(data)
+      const normalized = normalizeDates(data)
+      setEntries(normalized)
+      writeLocal(normalized)
     })()
     return () => {
       active = false
