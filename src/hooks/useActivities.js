@@ -27,6 +27,10 @@ function writeLocal(date, list) {
 // Locally-created ids (pre-server) start with these prefixes.
 const isLocalId = (id) => String(id).startsWith('local-') || String(id).startsWith('act-')
 
+// Guards the one-time local→server upload per date so concurrent/remounted
+// consumers don't both insert and duplicate. Resets on reload.
+const migratedDates = new Set()
+
 export function useActivities(date) {
   const [activities, setActivities] = useState(() => readLocal(date))
 
@@ -48,7 +52,8 @@ export function useActivities(date) {
       } else {
         // Server empty for this day → push any local entries up once.
         const local = readLocal(date)
-        if (local.length) {
+        if (local.length && !migratedDates.has(date)) {
+          migratedDates.add(date) // set synchronously before awaiting the insert
           const rows = local.map((a) => ({
             user_id: PLACEHOLDER_USER,
             date,

@@ -5,6 +5,11 @@ import { dayKey, todayKey } from '../lib/date'
 const PLACEHOLDER_USER = 'placeholder-user'
 const LS_KEY = 'peak:journal'
 
+// Guards the one-time local→server upload so two concurrent consumers of this
+// hook (the Journal card and the Calendar) don't both insert and duplicate.
+// Module-scoped: resets on reload, by which point the server is non-empty.
+let migrationStarted = false
+
 function readLocal() {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY) || '[]')
@@ -72,7 +77,8 @@ export function useJournal() {
         // Server empty (e.g. table just created) → push local entries up once
         // instead of overwriting them with nothing.
         const local = normalizeDates(readLocal())
-        if (local.length) {
+        if (local.length && !migrationStarted) {
+          migrationStarted = true // set synchronously before awaiting the insert
           const { data: inserted } = await supabase
             .from('journal_entries')
             .insert(local.map((e) => ({ user_id: PLACEHOLDER_USER, date: e.date, entry_text: e.entry_text })))
