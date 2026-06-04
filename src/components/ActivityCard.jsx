@@ -1,9 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Moon } from 'lucide-react'
-import CardFrame from './CardFrame.jsx'
+import {
+  Activity,
+  Bike,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Footprints,
+  Moon,
+  Mountain,
+  Plus,
+  TreePine,
+  Waves,
+  X,
+} from 'lucide-react'
+import CardFrame, { EDGE_BACK_ZONE } from './CardFrame.jsx'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import {
   getPhase,
@@ -14,8 +35,19 @@ import {
   formatMediumDate,
 } from '../lib/training'
 import { useTrainingSession } from '../hooks/useTrainingSession'
+import { useActivities } from '../hooks/useActivities'
 import { dayKey } from '../lib/date'
-import { EDGE_BACK_ZONE } from './CardFrame.jsx'
+
+// Quick-tap activities for the logger; also drives the per-type list icons.
+const QUICK_ACTIVITIES = [
+  { type: 'run', label: 'Run', icon: Footprints },
+  { type: 'climb', label: 'Climb', icon: Mountain },
+  { type: 'gym', label: 'Gym', icon: Dumbbell },
+  { type: 'bike', label: 'Bike', icon: Bike },
+  { type: 'hike', label: 'Hike', icon: TreePine },
+  { type: 'swim', label: 'Swim', icon: Waves },
+]
+const ICON_BY_TYPE = Object.fromEntries(QUICK_ACTIVITIES.map((q) => [q.type, q.icon]))
 
 export default function ActivityCard({ date, expandedId, onExpand, onCollapse }) {
   const isExpanded = expandedId === 'activity'
@@ -72,6 +104,7 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
     dateKey,
     session.type,
   )
+  const { activities, addActivity, removeActivity } = useActivities(dateKey)
 
   const keys = checklist.kind === 'list' ? checklist.items.map((i) => i.key) : []
   const total = keys.length
@@ -79,6 +112,8 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
   const pct = total ? Math.round((done / total) * 100) : 0
   const isRest = session.type === 'rest'
   const focus = getDayFocus({ session, phase })
+  const dayLabel =
+    offsetDays === 0 ? 'Today' : offsetDays === -1 ? 'Yesterday' : formatMediumDate(viewDate)
 
   const preview = (
     <div className="h-full flex flex-col">
@@ -233,6 +268,44 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
           </Button>
         </div>
       )}
+
+      {/* Manually-logged activities (e.g. an unplanned run) */}
+      <div className="mt-9">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm uppercase tracking-widest text-muted-foreground">Logged</h2>
+          <ActivityLogger dayLabel={dayLabel} onAdd={addActivity} />
+        </div>
+        {activities.length === 0 ? (
+          <p className="text-sm text-textMuted">No extra activities logged.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {activities.map((a) => {
+              const Icon = ICON_BY_TYPE[a.type] || Activity
+              return (
+                <li key={a.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-8 flex-shrink-0 place-content-center rounded-full bg-secondary text-textSecondary">
+                      <Icon className="size-4" />
+                    </span>
+                    <span className="truncate text-[15px] text-textPrimary">{a.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Remove activity"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeActivity(a.id)
+                    }}
+                    className="rounded-full p-1.5 text-textMuted transition-colors hover:text-destructive"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   )
 
@@ -245,6 +318,97 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
       preview={preview}
       expanded={expanded}
     />
+  )
+}
+
+// Add-activity sheet: quick-tap common options + a free-text entry.
+function ActivityLogger({ onAdd, dayLabel }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+
+  const add = (activity) => {
+    onAdd(activity)
+    setText('')
+    setOpen(false)
+  }
+  const addCustom = (e) => {
+    e.stopPropagation()
+    const name = text.trim()
+    if (name) add({ name, type: 'other' })
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(true)
+        }}
+        className="rounded-full bg-secondary/80 text-foreground hover:bg-secondary [&_svg]:size-4"
+      >
+        <Plus /> Add
+      </Button>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-3xl border-border bg-card max-h-[88dvh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <SheetHeader className="px-5">
+            <SheetTitle className="text-xl font-bold text-textPrimary">Log activity</SheetTitle>
+            <SheetDescription className="text-textMuted">{dayLabel}</SheetDescription>
+          </SheetHeader>
+
+          <div className="px-5 pt-2">
+            <h3 className="mb-2 text-sm uppercase tracking-widest text-muted-foreground">Quick add</h3>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_ACTIVITIES.map((q) => (
+                <button
+                  key={q.type}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    add({ name: q.label, type: q.type })
+                  }}
+                  className="flex items-center gap-2 rounded-full bg-secondary px-4 py-2.5 text-sm font-semibold text-textPrimary transition hover:bg-accent [&_svg]:size-4"
+                >
+                  <q.icon /> {q.label}
+                </button>
+              ))}
+            </div>
+
+            <h3 className="mb-2 mt-7 text-sm uppercase tracking-widest text-muted-foreground">
+              Or type it in
+            </h3>
+            <div className="mb-8 flex gap-2">
+              <input
+                type="text"
+                value={text}
+                placeholder='e.g. "Trail run · 5 mi"'
+                onChange={(e) => setText(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') addCustom(e)
+                }}
+                className="min-w-0 flex-1 rounded-xl bg-secondary px-3.5 py-3 text-base font-medium text-textPrimary outline-none placeholder:text-textMuted"
+              />
+              <Button
+                type="button"
+                onClick={addCustom}
+                disabled={!text.trim()}
+                className="shrink-0 rounded-xl px-5 font-semibold"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
 
