@@ -15,6 +15,7 @@ import {
 } from '../lib/training'
 import { useTrainingSession } from '../hooks/useTrainingSession'
 import { dayKey } from '../lib/date'
+import { EDGE_BACK_ZONE } from './CardFrame.jsx'
 
 export default function ActivityCard({ date, expandedId, onExpand, onCollapse }) {
   const isExpanded = expandedId === 'activity'
@@ -47,7 +48,8 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
   const touch = useRef(null)
   const onTouchStart = (e) => {
     const t = e.touches[0]
-    touch.current = { x: t.clientX, y: t.clientY }
+    // Leave the far-left edge to the card's back-swipe gesture.
+    touch.current = t.clientX <= EDGE_BACK_ZONE ? null : { x: t.clientX, y: t.clientY }
   }
   const onTouchEnd = (e) => {
     if (!touch.current) return

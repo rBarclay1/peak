@@ -1,5 +1,11 @@
+import { useRef } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
+// A swipe that begins within this many px of the left screen edge is treated as
+// a back gesture. Exported so cards with their own horizontal swipes (Activity)
+// can leave this zone alone.
+export const EDGE_BACK_ZONE = 28
 
 // Animated, expand-in-place card shell.
 // Each card is absolutely positioned in its 2x2 quadrant. Tapping expands it
@@ -32,6 +38,21 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
   const anyExpanded = expandedId !== null
   const hidden = anyExpanded && !isExpanded
   const pos = isExpanded ? EXPANDED : POSITIONS[id]
+
+  // Swipe in from the far-left edge to dismiss the card (iOS back gesture).
+  const edgeSwipe = useRef(null)
+  const onTouchStart = (e) => {
+    const t = e.touches[0]
+    edgeSwipe.current = t.clientX <= EDGE_BACK_ZONE ? { x: t.clientX, y: t.clientY } : null
+  }
+  const onTouchEnd = (e) => {
+    if (!edgeSwipe.current) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - edgeSwipe.current.x
+    const dy = t.clientY - edgeSwipe.current.y
+    edgeSwipe.current = null
+    if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) onCollapse()
+  }
 
   return (
     <div
@@ -72,6 +93,8 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
       {/* Expanded layer (full screen) */}
       <div
         className="absolute inset-0 overflow-y-auto"
+        onTouchStart={isExpanded ? onTouchStart : undefined}
+        onTouchEnd={isExpanded ? onTouchEnd : undefined}
         style={{
           opacity: isExpanded ? 1 : 0,
           pointerEvents: isExpanded ? 'auto' : 'none',
