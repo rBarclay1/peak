@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Moon } from 'lucide-react'
 import CardFrame from './CardFrame.jsx'
 import { Card } from '@/components/ui/card'
@@ -89,7 +90,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
   const trend = rows
     .filter((r) => r.sleep_score != null)
     .slice(-7)
-    .map((r) => Math.round(r.sleep_score))
+    .map((r) => ({ score: Math.round(r.sleep_score), day: weekdayLabel(r.date) }))
 
   const preview = (
     <div className="h-full flex flex-col">
@@ -116,7 +117,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
       ) : null}
 
       <div className="flex-1 flex items-center min-h-0 mt-3">
-        {trend.length >= 2 && <Sparkline data={trend} color={tier.color} height={40} />}
+        {trend.length >= 2 && <SleepTrend data={trend} color={tier.color} compact />}
       </div>
 
       <div className="flex items-center gap-4 pt-1 text-xs text-textMuted">
@@ -172,7 +173,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
           <h2 className="mb-2 text-sm uppercase tracking-widest text-muted-foreground">
             Last 7 nights
           </h2>
-          <Sparkline data={trend} color={tier.color} height={42} />
+          <SleepTrend data={trend} color={tier.color} />
         </div>
       )}
 
@@ -221,37 +222,106 @@ function StatCard({ label, value }) {
   )
 }
 
-function Sparkline({ data, color, height = 32 }) {
-  const w = 100
-  const max = Math.max(...data)
-  const min = Math.min(...data)
+// Short weekday label ("Thu") from a 'YYYY-MM-DD' string. Parsed as a local
+// date (not UTC) so the weekday matches the calendar day the row is keyed to.
+function weekdayLabel(dateStr) {
+  const [y, m, d] = String(dateStr).split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short' })
+}
+
+// Tracks the rendered pixel width so chart points are computed in real space —
+// keeps dots circular instead of stretched by an SVG viewBox.
+function useMeasuredWidth() {
+  const ref = useRef(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setWidth(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, width]
+}
+
+// Sleep-score trend with a soft area-gradient fill, line, and (in full mode)
+// a dot, value, and weekday label at every night. `compact` is the preview
+// glance version: just the filled line with the latest night marked.
+function SleepTrend({ data, color, compact = false }) {
+  const [ref, w] = useMeasuredWidth()
+  const H = compact ? 44 : 150
+  const padX = compact ? 4 : 16
+  const padTop = compact ? 6 : 22
+  const padBottom = compact ? 6 : 24
+
+  const scores = data.map((d) => d.score)
+  const max = Math.max(...scores)
+  const min = Math.min(...scores)
   const range = max - min || 1
-  const pad = 3
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * w
-      const y = height - pad - ((v - min) / range) * (height - pad * 2)
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
+  const innerW = Math.max(1, w - padX * 2)
+  const plotH = Math.max(1, H - padTop - padBottom)
+  const baseY = padTop + plotH
+
+  const px = (i) => padX + (data.length <= 1 ? innerW / 2 : (i / (data.length - 1)) * innerW)
+  const py = (s) => padTop + (1 - (s - min) / range) * plotH
+  const pts = data.map((d, i) => ({ x: px(i), y: py(d.score), ...d }))
+
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const last = pts[pts.length - 1]
+  const area = `${line} L${last.x.toFixed(1)},${baseY} L${pts[0].x.toFixed(1)},${baseY} Z`
+  const gid = `sleepgrad-${compact ? 'c' : 'f'}-${color.replace('#', '')}`
 
   return (
-    <svg
-      viewBox={`0 0 ${w} ${height}`}
-      width="100%"
-      height={height}
-      preserveAspectRatio="none"
-      className="block"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+    <div ref={ref} className="w-full">
+      {w > 0 && (
+        <svg width={w} height={H} className="block overflow-visible">
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {!compact && (
+            <line x1={padX} x2={w - padX} y1={baseY} y2={baseY} stroke="var(--color-border)" strokeWidth="1" />
+          )}
+
+          <path d={area} fill={`url(#${gid})`} />
+          <path
+            d={line}
+            fill="none"
+            stroke={color}
+            strokeWidth={compact ? 1.75 : 2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {compact ? (
+            <circle cx={last.x} cy={last.y} r="2.75" fill={color} />
+          ) : (
+            pts.map((p, i) => (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r="3.5" fill={color} stroke="var(--color-card)" strokeWidth="2" />
+                <text
+                  x={p.x}
+                  y={p.y - 9}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight="600"
+                  fill="var(--color-textSecondary)"
+                >
+                  {p.score}
+                </text>
+                <text x={p.x} y={baseY + 16} textAnchor="middle" fontSize="10" fill="var(--color-textMuted)">
+                  {p.day}
+                </text>
+              </g>
+            ))
+          )}
+        </svg>
+      )}
+    </div>
   )
 }
