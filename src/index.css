@@ -70,20 +70,23 @@
     @apply border-border outline-ring/50;
   }
 
-  /* Lock the whole page so iOS can't scroll or rubber-band it.
-     inset:0 sizes the frame from the layout viewport — the actual visible
-     screen — instead of guessing with vh/dvh, which can resolve short of the
-     display and leave dead space at the bottom. */
+  /* Lock the app to the *dynamic* viewport height. dvh tracks the actual
+     visible area as mobile browser chrome shows/hides — the same approach the
+     SummerShowdown app uses. The old position:fixed + inset:0 pinned to the
+     large/layout viewport, which on iOS left dead space at the bottom and
+     squeezed the bottom row (the Weight card). overflow:hidden keeps the
+     single-surface layout from scrolling or rubber-banding. */
   html,
   body {
-    position: fixed;
-    inset: 0;
+    height: 100vh; /* fallback for browsers without dvh */
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
   #root {
-    height: 100%;
+    height: 100vh;
+    height: 100dvh;
     width: 100%;
   }
 
