@@ -85,7 +85,13 @@ export function getPhaseDayInfo(date, phase) {
  *   CH = Climb + Hangboard (after climbing)
  *   CP = Climb + Weighted pull-ups (after climbing)
  *   G  = Gym (bench 3×5 + chest + core)
- *   R  = Rest + Run (full rest, easy run)
+ *   R  = Rest + Run (rest from climbing, easy run)
+ *   X  = Full rest (no run) — true zero day
+ *
+ * Rest scales with intensity: Phase I (volume) runs 4 climb days; Phase II
+ * (strength) and Phase III (sends) drop to 3 climb days with an extra rest day
+ * to absorb the higher load. Phase III's pre-send day is a full rest (X) so you
+ * arrive fresh for the Friday session.
  *
  * Rules baked into the plan: hangboard and weighted pull-ups are always AFTER
  * climbing and never on the same day; pull-ups are Phase II only (weeks 4–6).
@@ -97,24 +103,26 @@ const WEEK_PLANS = [
   { phase: 'I', tag: null, days: { Wed: 'CH', Thu: 'R', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'CH' } },
   // 3 — Phase I · DELOAD (cut climb volume ~40%, no hangboard)
   { phase: 'I', tag: 'deload', days: { Wed: 'C', Thu: 'R', Fri: 'R', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'R' } },
-  // 4 — Phase II · strength/power: max hangs + weighted pulls
-  { phase: 'II', tag: null, days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'CP' } },
+  // 4 — Phase II · strength/power: max hangs + weighted pulls. 3 climb days
+  //     (2 hang + 1 pull); Tue is rest so the heavier load gets an extra day off.
+  { phase: 'II', tag: null, days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'R' } },
   // 5 — Phase II · progress loads
-  { phase: 'II', tag: null, days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'CP' } },
+  { phase: 'II', tag: null, days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'R' } },
   // 6 — Phase II · PEAK intensity (heaviest week)
-  { phase: 'II', tag: 'peak', days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'CP' } },
+  { phase: 'II', tag: 'peak', days: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'R' } },
   // 7 — Phase II · DELOAD (no hangboard, no pulls)
   { phase: 'II', tag: 'deload', days: { Wed: 'C', Thu: 'R', Fri: 'R', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'R' } },
-  // 8 — Phase III · sends: drop pulls, hangboard maintenance (Sun only)
-  { phase: 'III', tag: null, days: { Wed: 'C', Thu: 'R', Fri: 'C', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'C' } },
+  // 8 — Phase III · sends: 3 climb days, hangboard maintenance (Sun only).
+  //     Thu is a full rest (X) to arrive fresh for the Fri send session.
+  { phase: 'III', tag: null, days: { Wed: 'C', Thu: 'X', Fri: 'C', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'R' } },
   // 9 — Phase III · sends: no accessories, execute
-  { phase: 'III', tag: null, days: { Wed: 'C', Thu: 'R', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'C' } },
+  { phase: 'III', tag: null, days: { Wed: 'C', Thu: 'X', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'R' } },
   // 10 — Phase III · PEAK: final send week
-  { phase: 'III', tag: 'peak', days: { Wed: 'C', Thu: 'R', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'C' } },
+  { phase: 'III', tag: 'peak', days: { Wed: 'C', Thu: 'X', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'R' } },
 ]
 
 const DOW_KEY = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' }
-const TYPE_OF = { C: 'climb', CH: 'climb', CP: 'climb', G: 'gym', R: 'restrun' }
+const TYPE_OF = { C: 'climb', CH: 'climb', CP: 'climb', G: 'gym', R: 'restrun', X: 'rest' }
 const ACCESSORY_OF = { CH: 'hang', CP: 'pulls' }
 
 // Resolves a date to its place in the plan: week (1..10), the week's plan entry,
@@ -136,6 +144,7 @@ export function getSession(date) {
   let label
   if (type === 'gym') label = 'Gym'
   else if (type === 'restrun') label = 'Rest + Run'
+  else if (type === 'rest') label = 'Rest'
   else label = SESSION_LABELS[accessory] || 'Climb'
   return { type, label, accessory }
 }
@@ -194,6 +203,11 @@ function runDetail(phase) {
 export function getChecklist({ session, phase, date }) {
   const { accessory, week, plan } = daySpec(date)
 
+  if (session.type === 'rest') {
+    // True zero day — nothing to check off; the card shows a rest state.
+    return { kind: 'list', items: [] }
+  }
+
   if (session.type === 'restrun') {
     // Phase I runs are pure Zone 2; later phases mix in Zone 4–5 (80/20).
     const runLabel = phase.id === 'I' ? 'Zone 2 Run' : 'Run · Z2 + Z4–5'
@@ -242,6 +256,8 @@ export function getDayFocus({ session, phase }) {
       return 'Bench, chest & core'
     case 'restrun':
       return phase.id === 'I' ? 'Active recovery · easy run' : 'Aerobic base + short intensity'
+    case 'rest':
+      return 'Full rest · stay off your fingers'
     default:
       return ''
   }
