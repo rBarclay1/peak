@@ -1,13 +1,28 @@
 """Vercel Cron function: sync Garmin Connect daily metrics into Supabase.
 
-Runs headless on a schedule (see vercel.json crons). Authenticates from a
-pre-serialized Garmin session token stored in the GARMIN_TOKEN env var — no
-files, no MFA. Generate that token once from a machine with a cached session:
+Runs headless on a schedule (see vercel.json crons).
 
-    python -c "import os;from garminconnect import Garmin;g=Garmin();\
-g.client.load(os.path.expanduser('~/.garminconnect'));print(g.client.dumps())"
+Auth strategy (tried in order):
+  1. GARMIN_TOKEN env var — a pre-serialized DI token JSON string (fastest,
+     no SSO round-trip).  Generate / refresh it on any machine that has a
+     valid local session:
 
-and store the output as GARMIN_TOKEN in the Vercel project (Production).
+       python -c "
+       import os
+       from garminconnect import Garmin
+       g = Garmin()
+       g.client.load(os.path.expanduser('~/.garminconnect'))
+       print(g.client.dumps())
+       "
+
+     Store the output as GARMIN_TOKEN in the Vercel project (Production).
+
+  2. GARMIN_EMAIL + GARMIN_PASSWORD env vars — used automatically when the
+     token is absent, expired, or otherwise fails.  The account must NOT
+     have MFA enabled (serverless functions can't prompt interactively).
+     When this path is taken, the response includes a `new_token` field with
+     the freshly-minted DI token — save it as GARMIN_TOKEN to avoid the
+     slower SSO login on future runs.
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -28,10 +43,12 @@ def supabase_base():
     return url
 
 
-def safe(fn, default=None):
+def safe(fn, default=None, label=""):
     try:
         return fn()
-    except Exception:
+    except Exception as exc:
+        if label:
+            print(f"[garmin-sync] {label}: {exc}")
         return default
 
 
@@ -41,7 +58,7 @@ def fetch_day(garmin, d):
     got = False
 
     # Sleep (score, total + stages)
-    sleep = safe(lambda: garmin.get_sleep_data(cdate)) or {}
+    sleep = safe(lambda: garmin.get_sleep_data(cdate), label=f"sleep {cdate}") or {}
     dto = sleep.get("dailySleepDTO") or {}
     score = (dto.get("sleepScores") or {}).get("overall", {}).get("value")
     if score is not None:
@@ -62,14 +79,14 @@ def fetch_day(garmin, d):
             got = True
 
     # HRV (last-night average, ms)
-    hrv = safe(lambda: garmin.get_hrv_data(cdate)) or {}
+    hrv = safe(lambda: garmin.get_hrv_data(cdate), label=f"hrv {cdate}") or {}
     last_night = (hrv.get("hrvSummary") or {}).get("lastNightAvg")
     if last_night is not None:
         row["hrv_score"] = last_night
         got = True
 
     # Resting HR
-    rhr = safe(lambda: garmin.get_rhr_day(cdate)) or {}
+    rhr = safe(lambda: garmin.get_rhr_day(cdate), label=f"rhr {cdate}") or {}
     metrics = ((rhr.get("allMetrics") or {}).get("metricsMap") or {}).get(
         "WELLNESS_RESTING_HEART_RATE"
     )
@@ -80,7 +97,7 @@ def fetch_day(garmin, d):
             got = True
 
     # Running activity (first run of the day, if any)
-    runs = safe(lambda: garmin.get_activities_by_date(cdate, cdate, "running")) or []
+    runs = safe(lambda: garmin.get_activities_by_date(cdate, cdate, "running"), label=f"runs {cdate}") or []
     if runs:
         a = runs[0]
         dist_m = a.get("distance") or 0
@@ -127,12 +144,32 @@ def upsert(rows):
 
 def run_sync(days=3):
     token = os.environ.get("GARMIN_TOKEN")
-    if not token:
-        raise RuntimeError("GARMIN_TOKEN not set")
-    garmin = Garmin()
-    # A >512-char token string is loaded directly (no SSO, no MFA); login()
-    # also refreshes the access token and loads the profile.
-    garmin.login(token)
+    email = os.environ.get("GARMIN_EMAIL")
+    password = os.environ.get("GARMIN_PASSWORD")
+
+    if not token and not (email and password):
+        raise RuntimeError(
+            "Set GARMIN_TOKEN, or set both GARMIN_EMAIL and GARMIN_PASSWORD"
+        )
+
+    # Pass credentials so login() can fall back to them automatically when the
+    # token is absent or fails to load (tokens_loaded = False path).
+    garmin = Garmin(email=email, password=password)
+    new_token = None
+
+    try:
+        garmin.login(token)
+    except Exception as token_err:
+        # The token loaded but is expired (or the profile-fetch failed).
+        # If credentials are available, do a fresh SSO login.
+        if not (email and password):
+            raise RuntimeError(
+                f"Token auth failed and no GARMIN_EMAIL/GARMIN_PASSWORD fallback: {token_err}"
+            ) from token_err
+        garmin = Garmin(email=email, password=password)
+        garmin.login(None)  # full SSO, no token
+        new_token = garmin.client.dumps()
+
     today = date.today()
     rows = []
     for i in range(days):
@@ -142,7 +179,16 @@ def run_sync(days=3):
             rows.append(r)
     if rows:
         upsert(rows)
-    return {"synced": len(rows), "dates": [r["date"] for r in rows]}
+    result: dict = {"synced": len(rows), "dates": [r["date"] for r in rows]}
+    if new_token:
+        # Token was refreshed via SSO. Surface it so the operator can update
+        # the GARMIN_TOKEN env var and avoid the slower SSO login next time.
+        result["new_token"] = new_token
+        result["warning"] = (
+            "Token was expired — re-authenticated via email/password. "
+            "Save new_token as GARMIN_TOKEN in Vercel to restore fast-path auth."
+        )
+    return result
 
 
 class handler(BaseHTTPRequestHandler):
