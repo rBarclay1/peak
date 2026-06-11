@@ -36,6 +36,7 @@ import {
 } from '../lib/training'
 import { useTrainingSession } from '../hooks/useTrainingSession'
 import { useActivities } from '../hooks/useActivities'
+import { useSchedule } from '../hooks/useSchedule'
 import { dayKey } from '../lib/date'
 
 // Quick-tap activities for the logger; also drives the per-type list icons.
@@ -94,6 +95,8 @@ export default function ActivityCard({ date, expandedId, onExpand, onCollapse })
     }
   }
 
+  // Subscribe so the card reflects schedule edits made elsewhere (the calendar).
+  useSchedule()
   const phase = getPhase(viewDate)
   const session = getSession(viewDate)
   const week = getProgramWeek(viewDate)

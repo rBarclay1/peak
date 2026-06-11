@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Dumbbell, Flame, Moon, NotebookPen, Scale } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Flame,
+  Moon,
+  NotebookPen,
+  Pencil,
+  RotateCcw,
+  Scale,
+} from 'lucide-react'
 import CardFrame from './CardFrame.jsx'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -18,12 +28,32 @@ import {
   getChecklist,
   getDayFocus,
   formatLongDate,
+  getDayOverride,
+  getDefaultDayCode,
+  getDayCode,
+  dayTypeLabel,
+  DAY_TYPES,
+  WEEKDAYS,
+  PHASE_LIST,
+  getPhasePattern,
+  isPhasePatternCustom,
 } from '../lib/training'
 import { sleepQuality, fmtDur } from '../lib/dayStats'
 import { dayKey } from '../lib/date'
 import { useJournal } from '../hooks/useJournal'
 import { useWeight } from '../hooks/useWeight'
+import { useSchedule } from '../hooks/useSchedule'
 import { GOALS } from '../hooks/useNutrition'
+
+// Distinct accent per session type, used by the schedule editors.
+const TYPE_COLOR = {
+  C: '#0a84ff',
+  CH: '#5e5ce6',
+  CP: '#bf5af2',
+  G: '#ff9f0a',
+  R: '#30d158',
+  X: '#98989f',
+}
 
 const PLACEHOLDER_USER = 'placeholder-user'
 // The block runs Wed → Tue, so the grid columns read W T F S S M T.
@@ -56,7 +86,9 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
 
   const { entries: journalEntries } = useJournal()
   const { entries: weightEntries, unit: weightUnit } = useWeight()
+  const { setDayCode, resetDay, savePhasePattern, resetPhasePattern } = useSchedule()
   const [selected, setSelected] = useState(null) // selected Date for the sheet
+  const [editingSchedule, setEditingSchedule] = useState(false) // phase-pattern sheet
 
   // Step the day-detail sheet to the previous/next day, clamped to the block.
   const shiftSelected = (delta) =>
@@ -149,9 +181,21 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
 
   const expanded = (
     <div>
-      <h1 className="text-lg font-bold text-textPrimary">
-        Summer Block <span className="font-normal text-muted-foreground">· Jun 3 – Aug 10</span>
-      </h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-bold text-textPrimary">
+          Summer Block <span className="font-normal text-muted-foreground">· Jun 3 – Aug 10</span>
+        </h1>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setEditingSchedule(true)
+          }}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-textSecondary transition hover:bg-secondary hover:text-textPrimary [&_svg]:size-3.5"
+        >
+          <Pencil /> Edit plan
+        </button>
+      </div>
 
       <div className="mt-4 flex items-baseline gap-2">
         <span className="font-display text-5xl font-extrabold tracking-tight text-textPrimary">
@@ -235,8 +279,20 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
               onNext={() => shiftSelected(1)}
               canPrev={selected > progStart}
               canNext={selected < blockEnd}
+              onSetDay={setDayCode}
+              onResetDay={resetDay}
             />
           )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={editingSchedule} onOpenChange={setEditingSchedule}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-3xl border-border bg-card max-h-[88dvh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ScheduleEditor onSave={savePhasePattern} onReset={resetPhasePattern} />
         </SheetContent>
       </Sheet>
     </div>
@@ -265,6 +321,8 @@ function DayDetail({
   onNext,
   canPrev,
   canNext,
+  onSetDay,
+  onResetDay,
 }) {
   const key = dayKey(date)
   const phase = getPhase(date)
@@ -273,6 +331,12 @@ function DayDetail({
   const focus = getDayFocus({ session, phase })
   const checklist = getChecklist({ session, phase, date, week })
   const status = STATUS[state]
+
+  const [editing, setEditing] = useState(false)
+  useEffect(() => setEditing(false), [key]) // close the editor when the day changes
+  const currentCode = getDayCode(date)
+  const override = getDayOverride(date)
+  const defaultCode = getDefaultDayCode(date)
 
   // Real per-day sleep (Garmin) and fuel (nutrition log) for this date.
   const [sleep, setSleep] = useState(null) // { score, durationMin } | null
@@ -349,10 +413,48 @@ function DayDetail({
       <div className="flex flex-col gap-7 px-5 pb-8 pt-2">
         {/* Activity */}
         <Section icon={Dumbbell} title="Activity" color="#30d158">
-          <div className="flex items-baseline justify-between">
-            <span className="text-lg font-semibold text-textPrimary">{session.label}</span>
-            <span className="text-sm text-textMuted">{focus}</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-lg font-semibold text-textPrimary">{session.label}</span>
+              {override && (
+                <span className="ml-2 align-middle text-[11px] font-semibold text-[#0a84ff]">Edited</span>
+              )}
+              <span className="block text-sm text-textMuted">{focus}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditing((v) => !v)}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-textSecondary transition hover:bg-secondary hover:text-textPrimary [&_svg]:size-3.5"
+            >
+              <Pencil /> {editing ? 'Done' : 'Edit'}
+            </button>
           </div>
+
+          {editing && (
+            <div className="mt-3 rounded-2xl bg-background/60 p-3">
+              <DayTypePicker
+                value={currentCode}
+                onPick={(code) => {
+                  if (code === defaultCode) onResetDay(key)
+                  else onSetDay(key, code)
+                  setEditing(false)
+                }}
+              />
+              {override && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onResetDay(key)
+                    setEditing(false)
+                  }}
+                  className="mt-3 flex items-center gap-1.5 text-xs font-medium text-textMuted transition hover:text-textPrimary [&_svg]:size-3.5"
+                >
+                  <RotateCcw /> Reset to plan default · {dayTypeLabel(defaultCode)}
+                </button>
+              )}
+            </div>
+          )}
+
           {checklist.kind === 'list' && (
             <ul className="mt-2 flex flex-col gap-2">
               {checklist.items.map((item) => (
@@ -497,6 +599,114 @@ function PlanItem({ label, detail, done }) {
 
 function NotLogged() {
   return <p className="text-sm text-textMuted">Not logged</p>
+}
+
+// Row of the six session types; the current one is filled, the rest tinted.
+function DayTypePicker({ value, onPick }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {DAY_TYPES.map((t) => {
+        const active = t.code === value
+        const color = TYPE_COLOR[t.code]
+        return (
+          <button
+            key={t.code}
+            type="button"
+            onClick={() => onPick(t.code)}
+            className="rounded-full px-3 py-1.5 text-sm font-semibold transition"
+            style={active ? { backgroundColor: color, color: '#fff' } : { backgroundColor: `${color}1f`, color }}
+          >
+            {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Phase-pattern sheet: one editable Wed→Tue template per phase.
+function ScheduleEditor({ onSave, onReset }) {
+  return (
+    <>
+      <SheetHeader className="px-5">
+        <SheetTitle className="text-xl font-bold text-textPrimary">Edit plan</SheetTitle>
+        <SheetDescription className="text-textMuted">
+          Set the weekly pattern for each phase. Tap a day to change its session.
+        </SheetDescription>
+      </SheetHeader>
+      <div className="flex flex-col gap-7 px-5 pb-8 pt-3">
+        {PHASE_LIST.map((p) => (
+          <PhasePatternEditor key={p.id} phase={p} onSave={onSave} onReset={onReset} />
+        ))}
+        <p className="text-xs leading-relaxed text-textMuted">
+          Patterns apply to the normal weeks of each phase — deload and peak weeks keep their own
+          reduced or intensified schedules. To change one specific date, tap that day on the calendar.
+        </p>
+      </div>
+    </>
+  )
+}
+
+function PhasePatternEditor({ phase, onSave, onReset }) {
+  const pattern = getPhasePattern(phase.id)
+  const custom = isPhasePatternCustom(phase.id)
+  const [openDay, setOpenDay] = useState(null)
+
+  const setDay = (weekday, code) => {
+    onSave(phase.id, { ...pattern, [weekday]: code })
+    setOpenDay(null)
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-textPrimary">{phase.name}</span>
+        {custom && (
+          <button
+            type="button"
+            onClick={() => {
+              onReset(phase.id)
+              setOpenDay(null)
+            }}
+            className="flex items-center gap-1 text-xs font-medium text-textMuted transition hover:text-textPrimary [&_svg]:size-3"
+          >
+            <RotateCcw /> Reset
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {WEEKDAYS.map((wd) => {
+          const code = pattern[wd]
+          const color = TYPE_COLOR[code]
+          const active = openDay === wd
+          const dt = DAY_TYPES.find((t) => t.code === code)
+          return (
+            <button
+              key={wd}
+              type="button"
+              onClick={() => setOpenDay(active ? null : wd)}
+              className={cn(
+                'flex flex-col items-center gap-1 rounded-xl py-2 transition',
+                active && 'ring-2 ring-foreground ring-inset',
+              )}
+              style={{ backgroundColor: `${color}1f` }}
+            >
+              <span className="text-[10px] font-medium text-textMuted">{wd}</span>
+              <span className="text-[11px] font-semibold leading-tight" style={{ color }}>
+                {dt?.short}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {openDay && (
+        <div className="mt-2.5 rounded-2xl bg-background/60 p-3">
+          <p className="mb-2 text-xs font-medium text-textMuted">{openDay}</p>
+          <DayTypePicker value={pattern[openDay]} onPick={(code) => setDay(openDay, code)} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 const CELL_STYLES = {

@@ -1,3 +1,5 @@
+import { dayKey } from './date'
+
 // Peak — training program logic.
 // Riley · V7–V9 · summer bouldering block: Jun 3 – Aug 10, 2026.
 // 10 weeks, 3 phases. Each training week runs Wed → Tue (the block opens on a
@@ -125,12 +127,128 @@ const DOW_KEY = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6:
 const TYPE_OF = { C: 'climb', CH: 'climb', CP: 'climb', G: 'gym', R: 'restrun', X: 'rest' }
 const ACCESSORY_OF = { CH: 'hang', CP: 'pulls' }
 
+// Weekdays in block order (the program week runs Wed → Tue). Used by the editors.
+export const WEEKDAYS = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue']
+
+// The six session types, in picker order, with display labels.
+export const DAY_TYPES = [
+  { code: 'C', label: 'Climb', short: 'Climb' },
+  { code: 'CH', label: 'Climb + Hang', short: 'Hang' },
+  { code: 'CP', label: 'Climb + Pulls', short: 'Pulls' },
+  { code: 'G', label: 'Gym', short: 'Gym' },
+  { code: 'R', label: 'Rest + Run', short: 'Run' },
+  { code: 'X', label: 'Full Rest', short: 'Rest' },
+]
+const DAY_TYPE_LABEL = Object.fromEntries(DAY_TYPES.map((t) => [t.code, t.label]))
+export function dayTypeLabel(code) {
+  return DAY_TYPE_LABEL[code] || code
+}
+
+// Phases as a plain list for the editor (id + display name).
+export const PHASE_LIST = PHASES.map((p) => ({ id: p.id, name: p.name }))
+
+// Seed pattern for each phase's editor — a representative *normal* week (deload
+// and peak weeks are intentionally excluded; they keep their own schedules).
+const DEFAULT_PHASE_PATTERNS = {
+  I: { Wed: 'CH', Thu: 'R', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'CH' },
+  II: { Wed: 'CH', Thu: 'R', Fri: 'CP', Sat: 'G', Sun: 'CH', Mon: 'R', Tue: 'R' },
+  III: { Wed: 'C', Thu: 'X', Fri: 'C', Sat: 'G', Sun: 'C', Mon: 'R', Tue: 'R' },
+}
+
+/* ------------------------------------------------------------------ *
+ * Schedule overrides — user edits layered on top of WEEK_PLANS.
+ *
+ *   dayOverrides:  { 'YYYY-MM-DD': code }  one-off edit to a single date
+ *   phasePatterns: { I|II|III: {Wed..Tue: code} }  per-phase weekly template
+ *
+ * A day's code resolves: date override → phase pattern (skipped on protected
+ * deload weeks) → baked WEEK_PLANS default. The store is module-level so the
+ * pure lookup functions below can read it; React views subscribe through
+ * useSchedule() (useSyncExternalStore) to re-render when it changes.
+ * ------------------------------------------------------------------ */
+let scheduleState = { dayOverrides: {}, phasePatterns: {} }
+const scheduleListeners = new Set()
+
+export function subscribeSchedule(listener) {
+  scheduleListeners.add(listener)
+  return () => scheduleListeners.delete(listener)
+}
+export function getScheduleSnapshot() {
+  return scheduleState
+}
+function emitSchedule(next) {
+  scheduleState = next
+  scheduleListeners.forEach((l) => l())
+  return next
+}
+
+/** Replace the whole override set (used when hydrating from storage/server). */
+export function replaceSchedule({ dayOverrides = {}, phasePatterns = {} } = {}) {
+  return emitSchedule({ dayOverrides, phasePatterns })
+}
+export function setDayOverride(key, code) {
+  return emitSchedule({
+    ...scheduleState,
+    dayOverrides: { ...scheduleState.dayOverrides, [key]: code },
+  })
+}
+export function clearDayOverride(key) {
+  const { [key]: _removed, ...rest } = scheduleState.dayOverrides
+  return emitSchedule({ ...scheduleState, dayOverrides: rest })
+}
+export function setPhasePattern(phaseId, days) {
+  return emitSchedule({
+    ...scheduleState,
+    phasePatterns: { ...scheduleState.phasePatterns, [phaseId]: days },
+  })
+}
+export function clearPhasePattern(phaseId) {
+  const { [phaseId]: _removed, ...rest } = scheduleState.phasePatterns
+  return emitSchedule({ ...scheduleState, phasePatterns: rest })
+}
+
+// Resolves the day code for a date through the override layers.
+function resolveDayCode(date, plan) {
+  const dow = DOW_KEY[date.getDay()]
+  const override = scheduleState.dayOverrides[dayKey(date)]
+  if (override && TYPE_OF[override]) return override
+  // Deload weeks keep their reduced schedule — a uniform phase pattern would
+  // silently add the volume back, so we never apply it there.
+  if (plan.tag !== 'deload') {
+    const code = scheduleState.phasePatterns[plan.phase]?.[dow]
+    if (code && TYPE_OF[code]) return code
+  }
+  return plan.days[dow]
+}
+
+/** Effective weekly pattern for a phase (user override if set, else the seed). */
+export function getPhasePattern(phaseId) {
+  return scheduleState.phasePatterns[phaseId] || DEFAULT_PHASE_PATTERNS[phaseId]
+}
+/** Whether a phase's pattern has been customised by the user. */
+export function isPhasePatternCustom(phaseId) {
+  return !!scheduleState.phasePatterns[phaseId]
+}
+/** One-off override code for a date, or null if it's running on the default. */
+export function getDayOverride(date) {
+  return scheduleState.dayOverrides[dayKey(date)] || null
+}
+/** Baked baseline code for a date, ignoring all user overrides. */
+export function getDefaultDayCode(date) {
+  const plan = WEEK_PLANS[getProgramWeek(date) - 1]
+  return plan.days[DOW_KEY[date.getDay()]]
+}
+/** Resolved day code for a date (after applying overrides). */
+export function getDayCode(date) {
+  return daySpec(date).code
+}
+
 // Resolves a date to its place in the plan: week (1..10), the week's plan entry,
-// the raw day code, the app session type, and any climbing accessory.
+// the resolved day code (after overrides), the app session type, and accessory.
 function daySpec(date) {
   const week = getProgramWeek(date)
   const plan = WEEK_PLANS[week - 1]
-  const code = plan.days[DOW_KEY[date.getDay()]]
+  const code = resolveDayCode(date, plan)
   return { week, plan, code, type: TYPE_OF[code], accessory: ACCESSORY_OF[code] || null }
 }
 
