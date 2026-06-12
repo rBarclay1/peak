@@ -208,11 +208,11 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
       <p className="mt-1 text-xs text-textMuted">Tap any day for its stats</p>
 
       {/* Day-of-week header */}
-      <div className="mt-6 flex items-center gap-3">
-        <span className="w-14 flex-shrink-0" />
+      <div className="mt-8 flex items-center gap-3">
+        <span className="w-16 flex-shrink-0" />
         <div className="flex items-center gap-2">
           {WEEK_LABELS.map((l, i) => (
-            <span key={i} className="w-5 text-center text-[10px] font-medium text-textMuted">
+            <span key={i} className="w-6 text-center text-[11px] font-medium text-textMuted">
               {l}
             </span>
           ))}
@@ -220,24 +220,24 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
       </div>
 
       {/* Heatmap rows */}
-      <div className="mt-1">
+      <div className="mt-2">
         {weeks.map((days, wi) => {
           const w = wi + 1
           return (
             <div key={w}>
               {PHASE_DIVIDERS[w] && (
-                <div className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wider text-textMuted">
+                <div className="mt-4 mb-1.5 text-xs font-semibold uppercase tracking-wider text-textMuted">
                   {PHASE_DIVIDERS[w]}
                 </div>
               )}
-              <div className="flex items-center gap-3 py-1">
-                <span className="w-14 flex-shrink-0 text-xs text-muted-foreground">Week {w}</span>
+              <div className="flex items-center gap-3 py-1.5">
+                <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">Week {w}</span>
                 <div className="flex items-center gap-2">
                   {days.map((c, i) => (
                     <Cell
                       key={i}
                       state={c.state}
-                      className="size-5 rounded-[4px]"
+                      className="size-6 rounded-[5px]"
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelected(c.date)
@@ -252,7 +252,7 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
       </div>
 
       {/* Legend */}
-      <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2">
+      <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2">
         <LegendItem state="completed" label="Done" />
         <LegendItem state="today" label="Today" />
         <LegendItem state="rest" label="Rest" />
@@ -734,7 +734,7 @@ function Cell({ state, className, onClick }) {
 function LegendItem({ state, label }) {
   return (
     <span className="flex items-center gap-1.5">
-      <Cell state={state} className="size-3 rounded-[2px]" />
+      <Cell state={state} className="size-3.5 rounded-[2px]" />
       <span className="text-xs text-textSecondary">{label}</span>
     </span>
   )
