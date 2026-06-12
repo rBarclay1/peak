@@ -32,7 +32,7 @@ const POSITIONS = {
 
 const EXPANDED = { top: 0, left: 0, right: 0, bottom: 0 }
 
-export default function CardFrame({ id, expandedId, onExpand, onCollapse, preview, expanded }) {
+export default function CardFrame({ id, expandedId, onExpand, onCollapse, preview, expanded, noScroll }) {
   const isExpanded = expandedId === id
   const anyExpanded = expandedId !== null
   const hidden = anyExpanded && !isExpanded
@@ -91,7 +91,7 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
 
       {/* Expanded layer (full screen) */}
       <div
-        className="absolute inset-0 overflow-y-auto"
+        className={`absolute inset-0 ${noScroll ? 'overflow-hidden' : 'overflow-y-auto'}`}
         onTouchStart={isExpanded ? onTouchStart : undefined}
         onTouchEnd={isExpanded ? onTouchEnd : undefined}
         style={{

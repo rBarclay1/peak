@@ -210,7 +210,7 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
       {/* Day-of-week header */}
       <div className="mt-8 flex items-center gap-3">
         <span className="w-16 flex-shrink-0" />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {WEEK_LABELS.map((l, i) => (
             <span key={i} className="w-6 text-center text-[11px] font-medium text-textMuted">
               {l}
@@ -232,7 +232,7 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
               )}
               <div className="flex items-center gap-3 py-1.5">
                 <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">Week {w}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {days.map((c, i) => (
                     <Cell
                       key={i}
@@ -306,6 +306,7 @@ export default function CalendarCard({ expandedId, onExpand, onCollapse }) {
       onCollapse={onCollapse}
       preview={preview}
       expanded={expanded}
+      noScroll
     />
   )
 }
