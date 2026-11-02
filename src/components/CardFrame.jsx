@@ -14,17 +14,18 @@ export const EDGE_BACK_ZONE = 28
 const G = 'var(--gap)'
 const HALF = 'var(--half)'
 
-// Asymmetric grid above a full-width Weight strip (bottom 16.67%):
-//   Left  (Activity / Fuel)               → 2 rows, ~41.67% height each
-//   Right (Recovery / Journal / Calendar) → 33.3% / 25% / 25%
-//   Weight                                → full-width bottom bar
+// Reserve enough height for the weight summary independently of viewport size.
+// The remaining rows share the available space above it.
+const WEIGHT_HEIGHT = 'max(112px, 15%)'
+const FIRST_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.38)`
+const SECOND_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.74)`
 const POSITIONS = {
-  activity: { top: G, left: G, right: G, bottom: `calc(65% + ${HALF})` },
-  fuel: { top: `calc(35% + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(31% + ${HALF})` },
-  recovery: { top: `calc(35% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(31% + ${HALF})` },
-  calendar: { top: `calc(69% + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(12% + ${HALF})` },
-  todos: { top: `calc(69% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(12% + ${HALF})` },
-  weight: { top: `calc(88% + ${HALF})`, left: G, right: G, bottom: G },
+  activity: { top: G, left: G, right: G, bottom: `calc(100% - ${FIRST_ROW_END} + ${HALF})` },
+  fuel: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(100% - ${SECOND_ROW_END} + ${HALF})` },
+  recovery: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(100% - ${SECOND_ROW_END} + ${HALF})` },
+  calendar: { top: `calc(${SECOND_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
+  todos: { top: `calc(${SECOND_ROW_END} + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
+  weight: { top: `calc(100% - ${WEIGHT_HEIGHT} + ${HALF})`, left: G, right: G, bottom: G },
 }
 
 const EXPANDED = { top: 0, left: 0, right: 0, bottom: 0 }

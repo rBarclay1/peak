@@ -70,26 +70,24 @@
     @apply border-border outline-ring/50;
   }
 
-  /* Lock the app to the *dynamic* viewport height. dvh tracks the actual
-     visible area as mobile browser chrome shows/hides — the same approach the
-     SummerShowdown app uses. The old position:fixed + inset:0 pinned to the
-     large/layout viewport, which on iOS left dead space at the bottom and
-     squeezed the bottom row (the Weight card). overflow:hidden keeps the
-     single-surface layout from scrolling or rubber-banding. */
+  /* Keep the large-viewport sizing verified on the installed iPhone app.
+     Switching to dvh reintroduces the bottom gap (see 4c4341b / 8046b3b).
+     viewport-fit=cover and the translucent status bar let the background
+     reach the screen edges; individual controls handle their safe areas. */
+  html,
+  body,
+  #root {
+    height: 100vh;
+    height: 100lvh;
+  }
+
   html,
   body {
-    /* The layout viewport (what dvh/fixed measure) is shorter than the real
-       display on this device, so dvh left a gap. Size to the large viewport
-       (the full screen) instead. iOS treats 100vh as the large viewport. */
-    height: 100vh;
-    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
   #root {
-    height: 100vh;
-    height: 100dvh;
     width: 100%;
   }
 
