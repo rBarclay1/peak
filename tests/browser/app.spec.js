@@ -254,3 +254,67 @@ test.describe('installed app', () => {
     ).toBeVisible()
   })
 })
+
+test('activities can be created, edited, completed and deleted without routine checkboxes', async ({
+  page,
+}) => {
+  await setup(page)
+  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
+  await expect(
+    page.getByRole('button', {
+      name: /Complete: Wake up|Complete: Shower|Complete: Class/,
+    }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: 'Add activity', exact: true }).click()
+  await page
+    .getByLabel('Activity name', { exact: true })
+    .fill('Stretching session')
+  await page.getByLabel('Activity time', { exact: true }).fill('18:00')
+  await page.getByRole('button', { name: 'Save activity', exact: true }).click()
+  let activity = page
+    .getByRole('article')
+    .filter({ hasText: 'Stretching session' })
+  await expect(activity).toBeVisible()
+  await activity
+    .getByRole('button', { name: 'Edit activity', exact: true })
+    .click()
+  await page
+    .getByLabel('Activity name', { exact: true })
+    .fill('Evening stretching')
+  await page.getByLabel('Duration in minutes').fill('20')
+  await page.getByRole('button', { name: 'Save activity', exact: true }).click()
+  activity = page.getByRole('article').filter({ hasText: 'Evening stretching' })
+  await activity
+    .getByRole('button', { name: 'Complete: Evening stretching', exact: true })
+    .click()
+  await expect(
+    activity.getByRole('button', {
+      name: 'Undo completion: Evening stretching',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await activity
+    .getByRole('button', { name: 'Delete activity', exact: true })
+    .click()
+  await expect(activity).toHaveCount(0)
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(activity).toBeVisible()
+  // Built-in activity deletion must also be reversible.
+  const run = page
+    .getByRole('article')
+    .filter({ hasText: 'Easy morning run / run-walk' })
+  await run
+    .getByRole('button', { name: 'Delete activity', exact: true })
+    .click()
+  await expect(run).toHaveCount(0)
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(run).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
+  await expect(
+    page.getByRole('button', {
+      name: 'Undo completion: Evening stretching',
+      exact: true,
+    }),
+  ).toBeVisible()
+})

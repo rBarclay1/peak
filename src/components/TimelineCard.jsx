@@ -1,3 +1,4 @@
+import ActivityEditor from './ActivityEditor.jsx'
 import { useState } from 'react'
 import {
   Check,
@@ -13,6 +14,7 @@ import { usePlanner } from '../hooks/usePlanner'
 import { useNow } from '../hooks/useNow'
 import {
   START,
+  isActivity,
   END,
   todayKey,
   shortDate,
@@ -53,8 +55,9 @@ export default function TimelineCard({
   const [moveDate, setMoveDate] = useState(today)
   const [moveTime, setMoveTime] = useState('19:45')
   const [undo, setUndo] = useState(null)
+  const [editor, setEditor] = useState(null)
   const tasks = planner.tasks
-    .filter((t) => t.date === date)
+    .filter((t) => t.date === date && isActivity(t))
     .sort((a, b) => a.time.localeCompare(b.time))
   const progress = dayProgress(planner.tasks, date)
   const timeNow = new Intl.DateTimeFormat('en-GB', {
@@ -69,7 +72,10 @@ export default function TimelineCard({
       (date !== today || minutes(t.time) + t.duration >= minutes(timeNow)),
   )
   function change(task, patch) {
-    setUndo({ id: task.id, value: { ...task, ...planner.records[task.id] } })
+    setUndo({
+      id: task.id,
+      value: { deleted: false, ...task, ...planner.records[task.id] },
+    })
     planner.update(task.id, patch)
   }
   function move(e) {
@@ -245,6 +251,50 @@ export default function TimelineCard({
           </div>
         </form>
       )}
+      <button
+        className={`${actionClass} mb-4 w-full text-exercise`}
+        onClick={() => {
+          setEditor({ task: null })
+          setMoving(null)
+        }}
+      >
+        <Plus size={16} className="inline mr-2" />
+        Add activity
+      </button>
+      {editor && (
+        <ActivityEditor
+          key={editor.task?.id || 'new'}
+          task={editor.task}
+          date={date}
+          records={planner.records}
+          onCancel={() => setEditor(null)}
+          onSave={(next) => {
+            if (editor.task) change(editor.task, next)
+            else {
+              planner.update(next.id, next)
+              setUndo({ id: next.id, value: { ...next, deleted: true } })
+            }
+            setSelectedDate(next.date)
+            setEditor(null)
+          }}
+        />
+      )}
+      {planner.tasks
+        .filter((t) => t.date === date && t.type === 'fixed')
+        .map((t) => (
+          <div
+            key={t.id}
+            className="mb-3 rounded-xl bg-secondary/40 px-4 py-3 text-sm text-textSecondary"
+          >
+            {formatTime(t.time)}–
+            {formatTime(timeString(minutes(t.time) + t.duration))} · {t.title}
+          </div>
+        ))}
+      {!tasks.length && (
+        <p className="my-5 text-sm text-textSecondary">
+          No activities planned. Add your own above.
+        </p>
+      )}
       <div className="space-y-3">
         {tasks.map((task) => {
           const done = task.status === 'done',
@@ -346,6 +396,23 @@ export default function TimelineCard({
                   Keep this session’s original duration.
                 </p>
               )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  className={actionClass}
+                  onClick={() => {
+                    setEditor({ task })
+                    setMoving(null)
+                  }}
+                >
+                  Edit activity
+                </button>
+                <button
+                  className={actionClass}
+                  onClick={() => change(task, { deleted: true })}
+                >
+                  Delete activity
+                </button>
+              </div>
               {!done && !excluded && task.type !== 'flex' && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -386,8 +453,8 @@ export default function TimelineCard({
       </div>
       <p className="mt-6 text-xs leading-relaxed text-textSecondary">
         Unfinished training folds into a suitable later session without extra
-        volume. To-dos return to your list. Daily routines stay on their
-        original day so history remains honest.
+        volume. Unfinished other activities return to your To-do list. Work and
+        class are shown for context; only activities count toward completion.
       </p>
     </div>
   )

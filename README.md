@@ -21,9 +21,11 @@ reloads. They never write to the production account.
 
 ## Daily plan
 
-The timeline includes the 6:30 wake-up, morning running logistics, work and class,
-meals, training, evening free time, and 10 pm bedtime. Check off items, mark partial
-completion, move flexible items, skip, or undo. The To-do list supports optional
+The timeline tracks climbing, running, golf, mobility, and scheduled tasks. Work
+and class remain as non-checkable context. Wake-up, shower, travel, and other
+routine microsteps are omitted; food and sleep stay in their own trackers. Add
+activities or edit their names, types, dates, times, durations, notes, and
+checklists. Check off, mark partial completion, move, skip, delete, or undo. The To-do list supports optional
 deadlines, editing, completion, deletion with undo, and finding a free evening slot.
 Dates, session details, schedule constraints and nutrition defaults live in
 `src/lib/plan.js`. Fuel targets can be edited in the app. The initial targets are

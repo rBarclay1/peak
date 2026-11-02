@@ -127,28 +127,33 @@ function block(
     ...extra,
   }
 }
+export function isActivity(task) {
+  return ['climb', 'golf', 'run', 'recovery', 'todo'].includes(task.type)
+}
 export function baseDay(date) {
   if (date < START || date > END) return []
-  const dow = dayDate(date).getDay(),
-    work = [1, 3, 5].includes(dow),
-    campus = [2, 4].includes(dow)
-  const run = running[date.slice(-2)],
-    training = trainingFor(date)
-  const blocks = [
-    block(
-      date,
-      'wake',
-      '06:30',
-      15,
-      'Wake up · water & log sleep',
-      'sleep',
-      'Aim for 10 pm–6:30 am sleep opportunity. Log actual sleep in Sleep.',
-    ),
-  ]
-  if (run) {
+  const dow = dayDate(date).getDay()
+  const work = [1, 3, 5].includes(dow)
+  const blocks = []
+  // Commitments provide context and reserve time, but are not checklist items.
+  if (work)
     blocks.push(
-      block(date, 'run-drive', '06:45', 15, 'Drive to running spot & warm up'),
+      block(date, 'work-am', '09:00', 480, 'Work · coffee shop', 'fixed'),
     )
+  if (dow === 2 || dow === 4)
+    blocks.push(
+      block(
+        date,
+        'class-am',
+        '09:30',
+        dow === 2 ? 440 : 150,
+        'Class',
+        'fixed',
+        'Leave for campus by 9 am.',
+      ),
+    )
+  const run = running[date.slice(-2)]
+  if (run)
     blocks.push(
       block(
         date,
@@ -157,11 +162,10 @@ export function baseDay(date) {
         run,
         'Easy morning run / run-walk',
         'run',
-        'Conversational effort. If running is new, alternate jogging and walking. No intervals or distance target.',
+        'Conversational effort. Alternate jogging and walking if needed.',
       ),
     )
-    blocks.push(block(date, 'run-home', '07:25', 20, 'Cool down & drive home'))
-  } else
+  else
     blocks.push(
       block(
         date,
@@ -173,138 +177,7 @@ export function baseDay(date) {
         'Optional easy movement. Rest instead if tired.',
       ),
     )
-  blocks.push(block(date, 'shower', '07:45', 30, 'Shower & get ready'))
-  blocks.push(
-    block(
-      date,
-      'breakfast',
-      '08:15',
-      25,
-      'Breakfast · about 30 g protein',
-      'meal',
-      'Include carbohydrate. Pack lunch and an afternoon snack; log actual food in Fuel.',
-    ),
-  )
-  if (work)
-    blocks.push(
-      block(
-        date,
-        'commute',
-        '08:40',
-        20,
-        'Head to coffee shop',
-        'fixed',
-        'Arrive for work by 9. Adjust the departure time if your commute needs longer.',
-      ),
-    )
-  if (campus)
-    blocks.push(block(date, 'commute', '09:00', 30, 'Drive to campus', 'fixed'))
-  // Split commitments around meals so the timeline has no hidden overlaps.
-  if (work)
-    blocks.push(
-      block(
-        date,
-        'work-am',
-        '09:00',
-        210,
-        'Work · coffee shop',
-        'fixed',
-        '9:30 commitment is protected inside this work block.',
-      ),
-    )
-  else if (campus)
-    blocks.push(
-      block(
-        date,
-        'class-am',
-        '09:30',
-        dow === 2 ? 180 : 150,
-        'Class',
-        'fixed',
-        dow === 2
-          ? 'Class runs 9:30–4:50. Lunch/snack times are placeholders for actual breaks.'
-          : 'Class runs 9:30–12.',
-      ),
-    )
-  else
-    blocks.push(
-      block(
-        date,
-        'morning',
-        '09:00',
-        60,
-        'Morning preparation / personal time',
-        'flex',
-      ),
-    )
-  const lunch = dow === 4 ? '12:00' : '12:30'
-  blocks.push(
-    block(
-      date,
-      'lunch',
-      lunch,
-      30,
-      'Lunch · about 30 g protein',
-      'meal',
-      campus
-        ? 'Use your actual class break; bring a packed meal.'
-        : 'Protein, carbohydrate, vegetables, and fluids.',
-    ),
-  )
-  if (work || dow === 2) {
-    blocks.push(
-      block(
-        date,
-        'afternoon-am',
-        '13:00',
-        150,
-        work ? 'Work' : 'Class',
-        'fixed',
-      ),
-    )
-    blocks.push(
-      block(
-        date,
-        'snack',
-        '15:30',
-        10,
-        'Afternoon snack · about 25 g protein',
-        'meal',
-        'Class days: eat during an available break.',
-      ),
-    )
-    blocks.push(
-      block(
-        date,
-        'afternoon-pm',
-        '15:40',
-        work ? 80 : 70,
-        work ? 'Work' : 'Class',
-        'fixed',
-      ),
-    )
-    blocks.push(
-      block(
-        date,
-        'return',
-        work ? '17:00' : '16:50',
-        30,
-        'Return home / transition',
-      ),
-    )
-  } else {
-    blocks.push(
-      block(
-        date,
-        'snack',
-        '15:30',
-        15,
-        'Afternoon snack · about 25 g protein',
-        'meal',
-      ),
-    )
-    blocks.push(block(date, 'study', '16:00', 60, 'Schoolwork / admin', 'flex'))
-  }
+  const training = trainingFor(date)
   if (training)
     blocks.push(
       block(
@@ -327,56 +200,10 @@ export function baseDay(date) {
         90,
         'Groceries & meal preparation',
         'todo',
-        'Prepare easy breakfasts, packed lunches, protein snacks, and carbohydrate sides.',
+        'Prepare packed lunches and easy protein snacks.',
         { deadline: END },
       ),
     )
-  blocks.push(
-    block(
-      date,
-      'dinner',
-      '19:00',
-      45,
-      'Dinner · about 35 g protein',
-      'meal',
-      'Protein, carbohydrate, vegetables. Log portions in Fuel.',
-    ),
-  )
-  blocks.push(
-    block(
-      date,
-      'free',
-      '19:45',
-      90,
-      'Schoolwork, chores & free time',
-      'flex',
-      'Open time for your to-do list. Keep some room to unwind.',
-    ),
-  )
-  blocks.push(
-    block(
-      date,
-      'prepare',
-      '21:15',
-      15,
-      'Check tomorrow · pack food & clothes',
-      'routine',
-    ),
-  )
-  blocks.push(
-    block(
-      date,
-      'wind-down',
-      '21:30',
-      30,
-      'Wind down',
-      'sleep',
-      'Protect sleep; unfinished training does not move into this block.',
-    ),
-  )
-  blocks.push(
-    block(date, 'bed', '22:00', 0, 'Lights out · 6:30 wake-up', 'sleep'),
-  )
   return blocks.sort((a, b) => a.time.localeCompare(b.time))
 }
 export const basePlan = () => dates().flatMap(baseDay)
@@ -547,7 +374,7 @@ export function dayProgress(tasks, date) {
   const items = tasks.filter(
     (t) =>
       t.date === date &&
-      t.type !== 'flex' &&
+      isActivity(t) &&
       t.status !== 'moved' &&
       t.status !== 'skipped',
   )

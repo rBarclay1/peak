@@ -43,8 +43,8 @@ test('base schedule has no overlapping timed blocks and protects actual commitme
       )
   }
   assert.equal(
-    baseDay('2026-11-03').find((t) => t.id.endsWith(':commute')).time,
-    '09:00',
+    baseDay('2026-11-03').find((t) => t.id.endsWith(':class-am')).time,
+    '09:30',
   )
   assert.equal(
     baseDay('2026-11-04').find((t) => t.id.endsWith(':work-am')).time,
@@ -189,4 +189,23 @@ test('rapid updates have monotonic revisions and offline completion beats automa
   }
   assert.equal(mergeRecords(manual, automatic).task.status, 'done')
   assert.equal(mergeRecords(automatic, manual).task.status, 'done')
+})
+
+test('routine microsteps are gone and only activities count toward completion', () => {
+  const day = baseDay('2026-11-03')
+  assert.ok(
+    !day.some((t) => ['routine', 'sleep', 'meal', 'flex'].includes(t.type)),
+  )
+  assert.ok(!day.some((t) => /wake up|shower|drive/i.test(t.title)))
+  assert.equal(dayProgress(day, '2026-11-03').total, 1)
+  const existing = patchRecord({}, '2026-11-03:run', {
+    title: 'My easy run',
+    duration: 15,
+  })
+  assert.equal(
+    materialize(existing).find((t) => t.id === '2026-11-03:run').title,
+    'My easy run',
+  )
+  const removed = patchRecord(existing, '2026-11-03:run', { deleted: true })
+  assert.equal(dayProgress(materialize(removed), '2026-11-03').total, 0)
 })
