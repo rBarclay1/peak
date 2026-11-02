@@ -82,14 +82,14 @@
        display on this device, so dvh left a gap. Size to the large viewport
        (the full screen) instead. iOS treats 100vh as the large viewport. */
     height: 100vh;
-    height: 100lvh;
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
   #root {
     height: 100vh;
-    height: 100lvh;
+    height: 100dvh;
     width: 100%;
   }
 
@@ -151,3 +151,5 @@
     transform: rotate(270deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

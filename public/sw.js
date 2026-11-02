@@ -1,55 +1,69 @@
-// Peak — basic service worker.
-// Minimal app-shell caching so the PWA installs and opens offline.
-// We'll expand caching strategy as the app grows.
-
-const CACHE = 'peak-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.json']
-
+// Cache the current shell and its hashed assets, never API responses or personal data.
+const CACHE = 'peak-shell-v2'
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)),
+    (async () => {
+      const cache = await caches.open(CACHE)
+      const response = await fetch('/index.html', { cache: 'reload' })
+      if (!response.ok) throw new Error('Could not update app shell')
+      const html = await response.clone().text()
+      const assets = [
+        ...html.matchAll(/(?:src|href)="(\/assets\/[^"\s]+)"/g),
+      ].map((match) => match[1])
+      await cache.addAll(['/manifest.json', ...assets])
+      await cache.put('/index.html', response)
+      await self.skipWaiting()
+    })(),
   )
-  self.skipWaiting()
 })
-
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
-      ),
+    (async () => {
+      for (const key of await caches.keys())
+        if (key.startsWith('peak-shell-') && key !== CACHE)
+          await caches.delete(key)
+      await self.clients.claim()
+    })(),
   )
-  self.clients.claim()
 })
-
 self.addEventListener('fetch', (event) => {
-  const { request } = event
-  if (request.method !== 'GET') return
-
-  // Network-first for navigations so users get fresh app code,
-  // falling back to the cached shell when offline.
+  const request = event.request,
+    url = new URL(request.url)
+  if (
+    request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/')
+  )
+    return
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html')),
+      (async () => {
+        try {
+          const response = await fetch(request)
+          if (!response.ok) throw new Error('Navigation failed')
+          const cache = await caches.open(CACHE)
+          await cache.put('/index.html', response.clone())
+          return response
+        } catch {
+          return (await caches.match('/index.html')) || Response.error()
+        }
+      })(),
     )
-    return
-  }
-
-  // Cache-first for other same-origin GET requests.
-  const url = new URL(request.url)
-  if (url.origin === self.location.origin) {
+  } else if (
+    url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/manifest.json'
+  ) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        return (
-          cached ||
-          fetch(request).then((response) => {
-            const copy = response.clone()
-            caches.open(CACHE).then((cache) => cache.put(request, copy))
-            return response
-          })
-        )
-      }),
+      (async () => {
+        // Hashed same-origin assets are identical across Origin header variants.
+        const cached = await caches.match(request, { ignoreVary: true })
+        if (cached) return cached
+        const response = await fetch(request)
+        if (response.ok)
+          await (await caches.open(CACHE)).put(request, response.clone())
+        return response
+      })(),
     )
   }
 })

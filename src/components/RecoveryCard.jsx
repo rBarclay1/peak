@@ -1,3 +1,6 @@
+import { usePlanner } from '../hooks/usePlanner'
+import ManualSleep from './ManualSleep.jsx'
+import { HISTORY_START, todayKey, dayDate } from '../lib/plan.js'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Moon, RefreshCw } from 'lucide-react'
 import CardFrame, { EDGE_BACK_ZONE } from './CardFrame.jsx'
@@ -5,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { dayKey } from '../lib/date'
-import { computeRecovery } from '../lib/training'
 import { useGarmin } from '../hooks/useGarmin'
 
 const STAGE_COLORS = { Deep: '#5e5ce6', Core: '#0a84ff', REM: '#5ac8fa', Awake: '#ff9f0a' }
@@ -43,12 +45,10 @@ function deriveSleep(row) {
   const sleepScore = Math.round(row.sleep_score)
   const hrv = row.hrv_score != null ? Math.round(row.hrv_score) : null
   const stages = stagesFromRow(row)
-  const totalMin = stages
-    ? stages.reduce((s, x) => s + x.min, 0)
-    : row.sleep_duration_hours != null
-      ? Math.round(row.sleep_duration_hours * 60)
-      : null
-  const recovery = hrv != null ? computeRecovery(hrv, sleepScore) : null
+  const totalMin = row.sleep_duration_hours != null
+    ? Math.round(row.sleep_duration_hours * 60)
+    : stages ? stages.filter(s => s.key !== 'Awake').reduce((sum, s) => sum + s.min, 0) : null
+  const recovery = null // Raw HRV is not a personalized recovery score.
   const tier = sleepTier(sleepScore)
   return { sleepScore, hrv, stages, totalMin, recovery, tier }
 }
@@ -73,6 +73,8 @@ function DayNavButton({ children, disabled, onClick, ...props }) {
 
 export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
   const { rows, refetch } = useGarmin()
+  const { records } = usePlanner()
+  const manual = records[`${todayKey()}:sleep-log`]?.hours
   const isExpanded = expandedId === 'recovery'
 
   // Day browsing in the expanded view. 0 = today; reset on collapse.
@@ -81,9 +83,9 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
     if (!isExpanded) setDayOffset(0)
   }, [isExpanded])
 
-  const today = new Date()
+  const today = dayDate(todayKey())
   const viewDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset)
-  const blockStart = new Date(today.getFullYear(), 5, 3) // Jun 3
+  const blockStart = dayDate(HISTORY_START)
   const atStart = viewDate <= blockStart
   const shiftDay = (delta) => {
     const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset + delta)
@@ -128,7 +130,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         </span>
         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
           <Moon className="size-7 text-textMuted" />
-          <span className="text-sm font-medium text-textMuted">No sleep data yet</span>
+          <span className="text-sm font-medium text-textMuted">{manual != null ? `${manual} hours · manual` : "No sleep data yet"}</span>
         </div>
       </div>
     )
@@ -138,11 +140,15 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
           <h1 className="text-3xl font-bold text-textPrimary">Sleep</h1>
           <GarminSync onSynced={refetch} label="Sync now" />
         </div>
+        <label className="block mt-5 text-sm text-textSecondary">Night ending
+          <input type="date" className="block rounded-xl bg-secondary p-3 mt-1" min={HISTORY_START} max={todayKey()} value={dayKey(viewDate)} onChange={e => { if (e.target.value) setDayOffset(Math.round((dayDate(e.target.value) - today) / 86400000)) }} />
+        </label>
+        <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <Moon className="size-10 text-textMuted" />
           <p className="text-base font-medium text-textSecondary">No sleep data yet</p>
           <p className="max-w-[18rem] text-sm text-textMuted">
-            Sync your Garmin to see sleep, HRV, and recovery here.
+            Sync your Garmin to see sleep and HRV here.
           </p>
         </div>
       </div>
@@ -170,6 +176,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         {totalMin != null && <span className="text-xs font-medium text-textMuted">{fmtDur(totalMin)}</span>}
       </div>
 
+      <p className="text-[10px] text-textSecondary mt-1">{sleepRows.at(-1).date === todayKey() ? "Last night" : `Latest: ${sleepRows.at(-1).date}`}</p>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="font-display text-[2.5rem] font-extrabold leading-none tracking-tight text-textPrimary">
           {sleepScore}
@@ -181,7 +188,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
 
       {stages && totalMin ? (
         <div className="mt-3">
-          <StagesBar stages={stages} total={totalMin} className="h-2" />
+          <StagesBar stages={stages} total={stages.reduce((sum, s) => sum + s.min, 0)} className="h-2" />
         </div>
       ) : null}
 
@@ -246,6 +253,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         </DayNavButton>
       </div>
 
+      <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
       {cur ? (
         <>
           <div className="mt-5 flex items-end gap-3">
@@ -257,7 +265,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
                 {cur.tier.label}
               </div>
               {cur.totalMin != null && (
-                <div className="text-sm text-textMuted">{fmtDur(cur.totalMin)} in bed</div>
+                <div className="text-sm text-textMuted">{fmtDur(cur.totalMin)} asleep</div>
               )}
             </div>
           </div>
@@ -265,7 +273,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
           {/* Sleep stages */}
           {cur.stages && cur.totalMin ? (
             <div className="mt-7">
-              <StagesBar stages={cur.stages} total={cur.totalMin} className="h-4" />
+              <StagesBar stages={cur.stages} total={cur.stages.reduce((sum, s) => sum + s.min, 0)} className="h-4" />
               <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
                 {cur.stages.map((s) => (
                   <div key={s.key} className="flex items-center gap-2">

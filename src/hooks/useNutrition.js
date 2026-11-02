@@ -1,132 +1,206 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { supabase } from '../lib/supabase'
-import { todayKey } from '../lib/date'
-
-const PLACEHOLDER_USER = 'placeholder-user'
-
-// Daily macro targets. Centralized here so the card and (later) a settings
-// screen read the same numbers. Mirrors the old hard-coded FuelCard goals.
-export const GOALS = {
-  calories: 2550,
-  protein: 155,
-  carbs: 280,
-  fat: 85,
+import { todayKey, USER, GOALS } from '../lib/plan.js'
+import { usePlanner, updatePlanner } from './usePlanner'
+import { mergeNutrition, acknowledge } from '../lib/nutritionQueue.js'
+export { GOALS }
+const KEY = 'peak.nutrition.queue.v2'
+let cache = {}
+try {
+  cache = JSON.parse(localStorage.getItem(KEY) || '{}')
+} catch {
+  /* first visit */
 }
-
-const SELECT = 'id, date, meal_name, meal_type, calories, protein_g, carbs_g, fat_g, created_at'
-
-function lsKey(date) {
-  return `peak:nutrition:${date}`
+const listeners = new Set()
+let snapshot = { days: cache, status: 'Loading…' }
+const subscribe = (fn) => {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
-
-function readLocal(date) {
+function publish(days, status = snapshot.status) {
   try {
-    return JSON.parse(localStorage.getItem(lsKey(date)) || '[]')
+    localStorage.setItem(KEY, JSON.stringify(days))
   } catch {
-    return []
+    status = 'Device storage full — keep open until synced.'
   }
+  snapshot = { days, status }
+  listeners.forEach((fn) => fn())
 }
-
-function writeLocal(date, logs) {
+function ensure(date) {
+  if (snapshot.days[date]) return
+  let legacy = []
   try {
-    localStorage.setItem(lsKey(date), JSON.stringify(logs))
+    legacy = JSON.parse(localStorage.getItem(`peak:nutrition:${date}`) || '[]')
   } catch {
-    /* non-fatal */
+    /* empty */
   }
+  const pending = {}
+  const logs = legacy.map((row) => {
+    if (!String(row.id).startsWith('local-')) return row
+    const copy = { ...row, id: crypto.randomUUID() }
+    pending[copy.id] = {
+      type: 'upsert',
+      id: copy.id,
+      row: copy,
+      version: crypto.randomUUID(),
+    }
+    return copy
+  })
+  publish({ ...snapshot.days, [date]: { logs, pending } })
 }
-
-function num(v) {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
+let flight = null
+export function syncNutrition(date) {
+  if (flight) return flight
+  flight = (async () => {
+    try {
+      // Include all pending days, not only the date currently on screen.
+      const days = new Set([
+        date,
+        ...Object.keys(snapshot.days).filter(
+          (d) => Object.keys(snapshot.days[d].pending).length,
+        ),
+      ])
+      for (const d of days) {
+        if (!d) continue
+        ensure(d)
+        const { data, error } = await supabase
+          .from('nutrition_logs')
+          .select('*')
+          .eq('user_id', USER)
+          .eq('date', d)
+          .order('created_at')
+        if (error) throw error
+        let state = snapshot.days[d]
+        publish({
+          ...snapshot.days,
+          [d]: { ...state, logs: mergeNutrition(data || [], state.pending) },
+        })
+        const sent = { ...snapshot.days[d].pending }
+        for (const operation of Object.values(sent)) {
+          const result =
+            operation.type === 'delete'
+              ? await supabase
+                  .from('nutrition_logs')
+                  .delete()
+                  .eq('id', operation.id)
+                  .eq('user_id', USER)
+              : await supabase
+                  .from('nutrition_logs')
+                  .upsert(operation.row, { onConflict: 'id' })
+          if (result.error) throw result.error
+          state = snapshot.days[d]
+          publish({
+            ...snapshot.days,
+            [d]: {
+              ...state,
+              pending: acknowledge(state.pending, {
+                [operation.id]: operation,
+              }),
+            },
+          })
+        }
+      }
+      publish(snapshot.days, 'Saved')
+    } catch {
+      publish(snapshot.days, 'Saved on this device · waiting to sync')
+    } finally {
+      flight = null
+    }
+  })()
+  return flight
 }
-
-/**
- * Today's nutrition log. localStorage is the instant/offline layer; Supabase
- * (nutrition_logs, prototype mode — text user_id, no RLS) is the source of
- * truth. Returns running totals and the shared macro goals.
- */
+const num = (v) => Math.max(0, Number.isFinite(Number(v)) ? Number(v) : 0)
 export function useNutrition(date = todayKey()) {
-  const [logs, setLogs] = useState(() => readLocal(date))
-  const [saving, setSaving] = useState(false)
-
+  const state = useSyncExternalStore(subscribe, () => snapshot)
+  const { goals } = usePlanner()
   useEffect(() => {
-    let active = true
-    // Show the selected day's cached logs immediately, then reconcile with the
-    // server so switching days doesn't briefly show the previous day's totals.
-    setLogs(readLocal(date))
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('nutrition_logs')
-        .select(SELECT)
-        .eq('user_id', PLACEHOLDER_USER)
-        .eq('date', date)
-        .order('created_at', { ascending: true })
-      if (!active || error || !data) return
-      setLogs(data)
-      writeLocal(date, data)
-    })()
+    ensure(date)
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') void syncNutrition(date)
+    }
+    refresh()
+    const timer = setInterval(refresh, 30000)
+    window.addEventListener('online', refresh)
+    document.addEventListener('visibilitychange', refresh)
     return () => {
-      active = false
+      clearInterval(timer)
+      window.removeEventListener('online', refresh)
+      document.removeEventListener('visibilitychange', refresh)
     }
   }, [date])
-
-  // food: { name, meal_type, calories, protein_g, carbs_g, fat_g }
-  const addLog = useCallback(
-    async (food) => {
-      setSaving(true)
-      const row = {
-        user_id: PLACEHOLDER_USER,
-        date,
-        meal_name: (food.name || '').trim() || 'Food',
-        meal_type: food.meal_type || 'snack',
-        calories: num(food.calories),
-        protein_g: num(food.protein_g),
-        carbs_g: num(food.carbs_g),
-        fat_g: num(food.fat_g),
-      }
-      const optimistic = { id: `local-${Date.now()}`, created_at: new Date().toISOString(), ...row }
-      setLogs((prev) => {
-        const next = [...prev, optimistic]
-        writeLocal(date, next)
-        return next
-      })
-
-      const { data, error } = await supabase.from('nutrition_logs').insert(row).select(SELECT).single()
-      if (!error && data) {
-        setLogs((prev) => {
-          const next = prev.map((l) => (l.id === optimistic.id ? data : l))
-          writeLocal(date, next)
-          return next
-        })
-      }
-      setSaving(false)
-    },
-    [date],
-  )
-
-  const removeLog = useCallback(
-    async (id) => {
-      setLogs((prev) => {
-        const next = prev.filter((l) => l.id !== id)
-        writeLocal(date, next)
-        return next
-      })
-      if (!String(id).startsWith('local-')) {
-        await supabase.from('nutrition_logs').delete().eq('id', id)
-      }
-    },
-    [date],
-  )
-
+  const addLog = (food) => {
+    ensure(date)
+    const row = {
+      id: crypto.randomUUID(),
+      user_id: USER,
+      date,
+      created_at: new Date().toISOString(),
+      meal_name: (food.name || '').trim() || 'Food',
+      meal_type: food.meal_type || 'snack',
+      calories: num(food.calories),
+      protein_g: num(food.protein_g),
+      carbs_g: num(food.carbs_g),
+      fat_g: num(food.fat_g),
+    }
+    const current = snapshot.days[date]
+    publish(
+      {
+        ...snapshot.days,
+        [date]: {
+          logs: [...current.logs, row],
+          pending: {
+            ...current.pending,
+            [row.id]: {
+              type: 'upsert',
+              id: row.id,
+              row,
+              version: crypto.randomUUID(),
+            },
+          },
+        },
+      },
+      'Saving…',
+    )
+    updatePlanner(`${date}:food-review`, { confirmed: false })
+    void syncNutrition(date)
+  }
+  const removeLog = (id) => {
+    ensure(date)
+    const current = snapshot.days[date]
+    publish(
+      {
+        ...snapshot.days,
+        [date]: {
+          logs: current.logs.filter((row) => row.id !== id),
+          pending: {
+            ...current.pending,
+            [id]: { type: 'delete', id, version: crypto.randomUUID() },
+          },
+        },
+      },
+      'Saving…',
+    )
+    updatePlanner(`${date}:food-review`, { confirmed: false })
+    void syncNutrition(date)
+  }
+  const logs = state.days[date]?.logs || []
   const totals = logs.reduce(
-    (t, l) => ({
-      calories: t.calories + num(l.calories),
-      protein: t.protein + num(l.protein_g),
-      carbs: t.carbs + num(l.carbs_g),
-      fat: t.fat + num(l.fat_g),
+    (t, row) => ({
+      calories: t.calories + num(row.calories),
+      protein: t.protein + num(row.protein_g),
+      carbs: t.carbs + num(row.carbs_g),
+      fat: t.fat + num(row.fat_g),
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   )
-
-  return { logs, totals, goals: GOALS, addLog, removeLog, saving }
+  return {
+    logs,
+    totals,
+    goals,
+    addLog,
+    removeLog,
+    syncStatus: state.status,
+    retry: () => syncNutrition(date),
+    saving: !!Object.keys(state.days[date]?.pending || {}).length,
+  }
 }

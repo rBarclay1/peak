@@ -3,6 +3,10 @@
     {
       "path": "/api/garmin-sync",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/rollover",
+      "schedule": "10 5 * * *"
     }
   ]
 }

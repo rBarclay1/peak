@@ -22,9 +22,9 @@ export default function WeightCard({ expandedId, onExpand, onCollapse }) {
 
   // Neutral starting point for the stepper before any reading exists. It's an
   // editable input, not a logged value — nothing is stored until "Log".
-  const [draft, setDraft] = useState(latest ?? 170)
+  const [draft, setDraft] = useState(latest ?? 140)
   useEffect(() => {
-    setDraft(latest ?? 170)
+    setDraft(latest ?? 140)
   }, [latest, isExpanded])
 
   const preview = (

@@ -1,3 +1,5 @@
+import FuelPlan from './FuelPlan.jsx'
+import { HISTORY_START, todayKey, dayDate } from '../lib/plan.js'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Flame, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import CardFrame, { EDGE_BACK_ZONE } from './CardFrame.jsx'
@@ -42,13 +44,13 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
   const [dayOffset, setDayOffset] = useState(0) // 0 = today
 
   // The day being logged/viewed. Bounded to the block start … today (no future).
-  const today = new Date()
+  const today = dayDate(todayKey())
   const viewDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + dayOffset)
   const dateKey = dayKey(viewDate)
-  const blockStart = new Date(today.getFullYear(), 5, 3) // Jun 3
+  const blockStart = dayDate(HISTORY_START)
   const atStart = viewDate <= blockStart
 
-  const { logs, totals, goals, addLog, removeLog } = useNutrition(dateKey)
+  const { logs, totals, goals, addLog, removeLog, syncStatus, retry } = useNutrition(dateKey)
   const { foods, saveFood, removeFood } = useSavedFoods()
 
   // Reset to the log view and today whenever the card collapses.
@@ -96,9 +98,9 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
       </span>
 
       {/* Weighted rings — protein hero, calories second */}
-      <div className="flex-1 flex items-center justify-center gap-5">
+      <div className="flex-1 flex items-center justify-center gap-2">
         <div className="flex flex-col items-center gap-1.5">
-          <Ring size={86} stroke={9} pct={pct(totals.protein, goals.protein)} color={COLORS.protein} animate>
+          <Ring size={70} stroke={7} pct={pct(totals.protein, goals.protein)} color={COLORS.protein} animate>
             <div className="flex flex-col items-center leading-none">
               <span className="font-display text-2xl font-extrabold tracking-tight text-textPrimary">
                 {r0(totals.protein)}
@@ -110,7 +112,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         </div>
 
         <div className="flex flex-col items-center gap-1.5">
-          <Ring size={54} stroke={6} pct={pct(totals.calories, goals.calories)} color={COLORS.calories} animate>
+          <Ring size={44} stroke={5} pct={pct(totals.calories, goals.calories)} color={COLORS.calories} animate>
             <Flame className="size-4" style={{ color: COLORS.calories }} />
           </Ring>
           <span className="text-[11px] font-semibold text-textMuted">
@@ -180,8 +182,9 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
           {r0(totals.calories).toLocaleString()} / {goals.calories.toLocaleString()} kcal · {dayLabel}
         </p>
 
+        <FuelPlan date={dateKey} totals={totals} logs={logs} syncStatus={syncStatus} retry={retry} />
         {/* Hero rings */}
-        <div className="my-8 flex items-center justify-center gap-10" key={isExpanded ? 'open' : 'closed'}>
+        <div className="my-8 flex items-center justify-center gap-5" key={isExpanded ? 'open' : 'closed'}>
           <div className="flex flex-col items-center gap-2">
             <Ring size={148} stroke={14} pct={pct(totals.protein, goals.protein)} color={COLORS.protein} animate={isExpanded}>
               <div className="flex flex-col items-center leading-none">

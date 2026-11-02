@@ -19,15 +19,12 @@ const HALF = 'var(--half)'
 //   Right (Recovery / Journal / Calendar) → 33.3% / 25% / 25%
 //   Weight                                → full-width bottom bar
 const POSITIONS = {
-  // Left column (ends at 83.33% to clear the Weight strip)
-  activity: { top: G, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(58.3333% + ${HALF})` },
-  fuel: { top: `calc(41.6667% + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(16.6667% + ${HALF})` },
-  // Right column
-  recovery: { top: G, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(66.6667% + ${HALF})` },
-  journal: { top: `calc(33.3333% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(41.6667% + ${HALF})` },
-  calendar: { top: `calc(58.3333% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(16.6667% + ${HALF})` },
-  // Full-width bottom strip
-  weight: { top: `calc(83.3333% + ${HALF})`, left: G, right: G, bottom: G },
+  activity: { top: G, left: G, right: G, bottom: `calc(65% + ${HALF})` },
+  fuel: { top: `calc(35% + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(31% + ${HALF})` },
+  recovery: { top: `calc(35% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(31% + ${HALF})` },
+  calendar: { top: `calc(69% + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(12% + ${HALF})` },
+  todos: { top: `calc(69% + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(12% + ${HALF})` },
+  weight: { top: `calc(88% + ${HALF})`, left: G, right: G, bottom: G },
 }
 
 const EXPANDED = { top: 0, left: 0, right: 0, bottom: 0 }
@@ -55,6 +52,11 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
 
   return (
     <div
+      aria-hidden={hidden || undefined}
+      role={!isExpanded ? 'button' : undefined}
+      tabIndex={!isExpanded && !hidden ? 0 : -1}
+      aria-label={!isExpanded ? `Open ${id === 'activity' ? 'timeline' : id === 'recovery' ? 'sleep' : id === 'todos' ? 'to-do list' : id}` : undefined}
+      onKeyDown={e => { if (!isExpanded && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onExpand(id) } }}
       onClick={() => {
         if (!isExpanded) onExpand(id)
       }}
@@ -79,7 +81,9 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
     >
       {/* Preview layer (grid view) */}
       <div
-        className="absolute inset-0 p-5"
+        className="absolute inset-0 p-4"
+        aria-hidden={isExpanded || hidden}
+        inert={isExpanded || hidden ? "" : undefined}
         style={{
           opacity: isExpanded ? 0 : 1,
           pointerEvents: isExpanded ? 'none' : 'auto',
@@ -91,6 +95,8 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
 
       {/* Expanded layer (full screen) */}
       <div
+        aria-hidden={!isExpanded || hidden}
+        inert={!isExpanded || hidden ? "" : undefined}
         className={`absolute inset-0 ${noScroll ? 'overflow-hidden' : 'overflow-y-auto'}`}
         onTouchStart={isExpanded ? onTouchStart : undefined}
         onTouchEnd={isExpanded ? onTouchEnd : undefined}
