@@ -22,13 +22,11 @@ reloads. They never write to the production account.
 ## Daily plan
 
 The timeline tracks climbing, running, golf, mobility, and scheduled tasks. Work
-and class remain as non-checkable context. Wake-up, shower, travel, and other
-routine microsteps are omitted. Meals, study, and mobility appear in the day;
-food and sleep retain their detailed trackers. Add
-activities or edit their names, types, dates, times, durations, notes, and
-checklists. Check off, mark partial completion, move, skip, delete, or undo. The simple To-do list sits below the schedule in Your Day: add text, check a task
-off to hide it, and undo an accidental completion. Existing tasks are preserved.
-The separate November Plan and To-do tiles have been removed.
+and training populate the daily checklist. nCino work appears on workdays and
+schoolwork appears daily. Meals, wake-up steps, and times are hidden. Tap a task
+for drills, check it off to hide it, or add personal tasks that persist until done.
+The header shows days remaining until November 20. Fuel and sleep use compact
+summary cards below the larger checklist.
 Dates, session details, schedule constraints and nutrition defaults live in
 `src/lib/plan.js`. Fuel targets can be edited below the food log; sleep routine settings sit below
 sleep data. Macro estimates also return short, editable meal titles. The initial targets are

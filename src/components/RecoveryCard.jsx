@@ -192,9 +192,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         </div>
       ) : null}
 
-      <div className="flex-1 flex items-center min-h-0 mt-3">
-        {trend.length >= 2 && <SleepTrend data={trend} color={tier.color} compact />}
-      </div>
+      <div className="flex-1" />
 
       <div className="flex items-center gap-4 pt-1 text-xs text-textMuted">
         {recovery != null && (

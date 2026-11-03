@@ -17,7 +17,7 @@ const HALF = 'var(--half)'
 // Reserve enough height for the weight summary independently of viewport size.
 // The remaining rows share the available space above it.
 const WEIGHT_HEIGHT = 'max(112px, 15%)'
-const FIRST_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.56)`
+const FIRST_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.64)`
 const POSITIONS = {
   activity: { top: G, left: G, right: G, bottom: `calc(100% - ${FIRST_ROW_END} + ${HALF})` },
   fuel: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },

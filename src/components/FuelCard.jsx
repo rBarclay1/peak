@@ -100,9 +100,9 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
       {/* Weighted rings — protein hero, calories second */}
       <div className="flex-1 flex items-center justify-center gap-2">
         <div className="flex flex-col items-center gap-1.5">
-          <Ring size={70} stroke={7} pct={pct(totals.protein, goals.protein)} color={COLORS.protein} animate>
+          <Ring size={54} stroke={5} pct={pct(totals.protein, goals.protein)} color={COLORS.protein} animate>
             <div className="flex flex-col items-center leading-none">
-              <span className="font-display text-2xl font-extrabold tracking-tight text-textPrimary">
+              <span className="font-display text-xl font-extrabold tracking-tight text-textPrimary">
                 {r0(totals.protein)}
               </span>
               <span className="mt-0.5 text-[10px] font-medium text-textMuted">/{goals.protein}g</span>
@@ -121,11 +121,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
         </div>
       </div>
 
-      {/* Minor macros */}
-      <div className="flex flex-col gap-2">
-        <MiniBar label="Carbs" value={totals.carbs} goal={goals.carbs} color={COLORS.carbs} />
-        <MiniBar label="Fat" value={totals.fat} goal={goals.fat} color={COLORS.fat} />
-      </div>
+      <p className="text-[10px] text-textMuted">{r0(totals.carbs)}g carbs · {r0(totals.fat)}g fat</p>
     </div>
   )
 

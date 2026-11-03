@@ -57,26 +57,19 @@ async function setup(page) {
   return { database, errors }
 }
 
-test('mobile dashboard, timeline completion/undo and day navigation', async ({
-  page,
-}) => {
-  const { errors } = await setup(page)
-  await expect(
-    page.getByRole('heading', { name: 'Peak · November' }),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('button', { name: 'Open timeline', exact: true }),
-  ).toBeVisible()
-  await page.screenshot({ path: 'test-results/dashboard.png' })
-  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
-  await page.getByRole('button', { name: 'Undo completion: Easy morning run / run-walk', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Complete: Easy morning run / run-walk', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Undo completion: Easy morning run / run-walk', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Driving range · contact & consistency' })).toBeVisible()
-  await page.getByRole('button', { name: 'Next timeline day' }).click()
-  await expect(page.getByRole('heading', { name: 'Easy climbing · movement & volume' })).toBeVisible()
-  expect(errors).toEqual([])
+test('daily checklist shows training drills without meals or times', async ({ page }) => {
+  await setup(page)
+  await expect(page.getByRole('progressbar', { name: 'Progress toward November 20' })).toHaveAttribute('aria-valuenow', '6')
+  await expect(page.getByRole('button', { name: 'Complete todo: Driving range', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Complete todo: Breakfast|Complete todo: Lunch|Complete todo: Easy run/ })).toHaveCount(0)
+  await page.getByRole('button', {name: 'Details: Driving range', exact: true}).click()
+  await expect(page.getByText('10 easy wedge shots · balanced finish', {exact:true})).toBeVisible()
+  await page.getByRole('button', {name: 'Complete todo: Driving range', exact:true}).click()
+  await expect(page.getByRole('button', {name: 'Complete todo: Driving range', exact:true})).toHaveCount(0)
+  await page.getByRole('button', {name:'Undo', exact:true}).click()
+  await page.getByRole('button', {name:'Next checklist day'}).click()
+  await expect(page.getByRole('button', {name:'Complete todo: nCino work', exact:true})).toBeVisible()
+  await expect(page.getByRole('button', {name:'Complete todo: Schoolwork', exact:true})).toBeVisible()
 })
 
 test('simple checklist adds, hides completed tasks, undoes and survives reload', async ({ page }) => {
@@ -91,9 +84,9 @@ test('simple checklist adds, hides completed tasks, undoes and survives reload',
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
   await page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Undo task completion' }).click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await page.reload()
-  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
+  await page.getByRole('button', { name: 'Open checklist', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true })).toBeVisible()
   await expect(page.getByLabel('Due date · optional')).toHaveCount(0)
   await page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true }).click()
@@ -143,13 +136,13 @@ test('offline food and todo saves survive reload then sync once connection retur
   const { database, errors } = await setup(page)
   await page.route('https://peak-test.supabase.co/**', (route) => route.abort())
   await page
-    .getByRole('button', { name: 'Open timeline', exact: true })
+    .getByRole('button', { name: 'Open checklist', exact: true })
     .click()
   await page.getByLabel('Task', { exact: true }).fill('Offline task')
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
   await page.reload()
   await page
-    .getByRole('button', { name: 'Open timeline', exact: true })
+    .getByRole('button', { name: 'Open checklist', exact: true })
     .click()
   await expect(page.getByText('Offline task', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
@@ -208,84 +201,19 @@ test.describe('installed app', () => {
     await context.setOffline(true)
     await page.reload()
     await page
-      .getByRole('button', { name: 'Open timeline', exact: true })
+      .getByRole('button', { name: 'Open checklist', exact: true })
       .click()
     await page.getByLabel('Task', { exact: true }).fill('Offline PWA task')
     await page.getByRole('button', { name: 'Add task', exact: true }).click()
     await page.reload()
     await page
-      .getByRole('button', { name: 'Open timeline', exact: true })
+      .getByRole('button', { name: 'Open checklist', exact: true })
       .click()
     await expect(
       page.getByText('Offline PWA task', { exact: true }),
     ).toBeVisible()
   })
 })
-
-test('activities can be created, edited, completed and deleted without routine checkboxes', async ({
-  page,
-}) => {
-  await setup(page)
-  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
-  await expect(
-    page.getByRole('button', {
-      name: /Complete: Wake up|Complete: Shower|Complete: Class/,
-    }),
-  ).toHaveCount(0)
-  await page.getByRole('button', { name: 'Add activity', exact: true }).click()
-  await page
-    .getByLabel('Activity name', { exact: true })
-    .fill('Stretching session')
-  await page.getByLabel('Activity time', { exact: true }).fill('18:15')
-  await page.getByRole('button', { name: 'Save activity', exact: true }).click()
-  let activity = page
-    .getByRole('article')
-    .filter({ hasText: 'Stretching session' })
-  await expect(activity).toBeVisible()
-  await activity
-    .getByRole('button', { name: 'Edit activity', exact: true })
-    .click()
-  await page
-    .getByLabel('Activity name', { exact: true })
-    .fill('Evening stretching')
-  await page.getByLabel('Duration in minutes').fill('20')
-  await page.getByRole('button', { name: 'Save activity', exact: true }).click()
-  activity = page.getByRole('article').filter({ hasText: 'Evening stretching' })
-  await activity
-    .getByRole('button', { name: 'Complete: Evening stretching', exact: true })
-    .click()
-  await expect(
-    activity.getByRole('button', {
-      name: 'Undo completion: Evening stretching',
-      exact: true,
-    }),
-  ).toBeVisible()
-  await activity
-    .getByRole('button', { name: 'Delete activity', exact: true })
-    .click()
-  await expect(activity).toHaveCount(0)
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(activity).toBeVisible()
-  // Built-in activity deletion must also be reversible.
-  const run = page
-    .getByRole('article')
-    .filter({ hasText: 'Easy morning run / run-walk' })
-  await run
-    .getByRole('button', { name: 'Delete activity', exact: true })
-    .click()
-  await expect(run).toHaveCount(0)
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(run).toBeVisible()
-  await page.reload()
-  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
-  await expect(
-    page.getByRole('button', {
-      name: 'Undo completion: Evening stretching',
-      exact: true,
-    }),
-  ).toBeVisible()
-})
-
 
 test('long saved food names stay inside the iPhone viewport and the form scrolls vertically', async ({ page }) => {
   const { database } = await setup(page)

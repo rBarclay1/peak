@@ -12,6 +12,8 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(null)
   const now = useNow(),
     today = todayKey(now)
+  const daysLeft = Math.max(0, Math.ceil((new Date(`${END}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000))
+  const tripProgress = Math.max(0, Math.min(100, (18 - daysLeft) / 18 * 100))
   const props = {
     expandedId,
     onExpand: setExpandedId,
@@ -43,6 +45,10 @@ export default function Home() {
                 Peak · November
               </h1>
               <span className="text-[11px] text-exercise">{phase(date)}</span>
+            </div>
+            <div className="mt-2">
+              <div className="mb-1 flex justify-between text-[10px] text-textSecondary"><span>Nov 20 · climbing + golf</span><span>{daysLeft ? `${daysLeft} days to go` : 'Trip day'}</span></div>
+              <div role="progressbar" aria-label="Progress toward November 20" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(tripProgress)} className="h-1 rounded-full bg-secondary overflow-hidden"><div className="h-full rounded-full bg-exercise" style={{width: `${tripProgress}%`}}/></div>
             </div>
           </header>
         )}
