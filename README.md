@@ -25,8 +25,7 @@ The timeline tracks climbing, running, golf, mobility, and scheduled tasks. Work
 and training populate the daily checklist. nCino work appears on workdays and
 schoolwork appears daily. Meals, wake-up steps, and times are hidden. Tap a task
 for drills, check it off to hide it, or add personal tasks that persist until done.
-The header shows days remaining until November 20. Fuel and sleep use compact
-summary cards below the larger checklist.
+The header shows days remaining until November 20. Fuel and sleep retain their full summary cards below the daily checklist.
 Dates, session details, schedule constraints and nutrition defaults live in
 `src/lib/plan.js`. Fuel targets can be edited below the food log; sleep routine settings sit below
 sleep data. Macro estimates also return short, editable meal titles. The initial targets are
