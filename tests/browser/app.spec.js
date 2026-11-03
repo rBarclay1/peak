@@ -57,7 +57,7 @@ async function setup(page) {
   return { database, errors }
 }
 
-test('mobile dashboard, timeline completion/undo and calendar navigation', async ({
+test('mobile dashboard, timeline completion/undo and day navigation', async ({
   page,
 }) => {
   const { errors } = await setup(page)
@@ -69,69 +69,36 @@ test('mobile dashboard, timeline completion/undo and calendar navigation', async
   ).toBeVisible()
   await page.screenshot({ path: 'test-results/dashboard.png' })
   await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
-  await page
-    .getByRole('button', {
-      name: 'Complete: Easy morning run / run-walk',
-      exact: true,
-    })
-    .click()
-  await expect(
-    page.getByRole('button', {
-      name: 'Undo completion: Easy morning run / run-walk',
-    }),
-  ).toBeVisible()
+  await page.getByRole('button', { name: 'Undo completion: Easy morning run / run-walk', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Complete: Easy morning run / run-walk', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(
-    page.getByRole('button', {
-      name: 'Complete: Easy morning run / run-walk',
-      exact: true,
-    }),
-  ).toBeVisible()
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await page.getByRole('button', { name: 'Open calendar', exact: true }).click()
-  await page.getByRole('button', { name: 'View Nov 17', exact: true }).click()
-  await page.getByRole('button', { name: 'Open this day →' }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Short climbing primer' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Undo completion: Easy morning run / run-walk', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Driving range · contact & consistency' })).toBeVisible()
+  await page.getByRole('button', { name: 'Next timeline day' }).click()
+  await expect(page.getByRole('heading', { name: 'Easy climbing · movement & volume' })).toBeVisible()
   expect(errors).toEqual([])
 })
 
-test('todo add, schedule, complete, reopen, edit and delete undo survive reload', async ({
-  page,
-}) => {
+test('simple checklist adds, hides completed tasks, undoes and survives reload', async ({ page }) => {
   const { errors } = await setup(page)
-  await page
-    .getByRole('button', { name: 'Open to-do list', exact: true })
-    .click()
+  // The checklist works directly on the dashboard without opening another tile.
+  await expect(page.getByRole('button', { name: 'Open calendar', exact: true })).toHaveCount(0)
+  for (const title of ['Pick up groceries', 'Read a chapter']) {
+    await page.getByLabel('Task', { exact: true }).fill(title)
+    await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  }
   await page.getByLabel('Task', { exact: true }).fill('Finish assignment')
-  await page.getByLabel('Due date · optional').fill('2026-11-06')
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
-  const item = page
-    .getByRole('article')
-    .filter({ hasText: 'Finish assignment' })
-  await item.getByRole('button', { name: 'Find a time' }).click()
-  await expect(item).toContainText('7:45 pm')
+  await page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Undo task completion' }).click()
   await page.reload()
-  await page
-    .getByRole('button', { name: 'Open to-do list', exact: true })
-    .click()
-  await item
-    .getByRole('button', { name: 'Complete todo: Finish assignment' })
-    .click()
-  await page.getByRole('button', { name: 'Show completed' }).click()
-  await item
-    .getByRole('button', { name: 'Reopen todo: Finish assignment' })
-    .click()
-  await item.getByRole('button', { name: 'Edit', exact: true }).click()
-  await page.getByLabel('Task', { exact: true }).fill('Finish lab report')
-  await page.getByRole('button', { name: 'Save task' }).click()
-  const edited = page
-    .getByRole('article')
-    .filter({ hasText: 'Finish lab report' })
-  await edited.getByRole('button', { name: 'Delete', exact: true }).click()
-  await page.getByRole('button', { name: 'Undo delete' }).click()
-  await expect(edited).toBeVisible()
+  await page.getByRole('button', { name: 'Open timeline', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Due date · optional')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true }).click()
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Complete todo: Finish assignment', exact: true })).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
@@ -143,7 +110,7 @@ test('food estimate remains editable, logs persist, targets and manual sleep wor
   await page.getByRole('button', { name: 'Add food', exact: true }).click()
   await page
     .getByPlaceholder('e.g. "2 eggs, toast & butter"')
-    .fill('Yogurt and oats')
+    .fill('A large bowl of plain Greek yogurt, half a cup of oats, and a handful of berries')
   await page.getByRole('button', { name: 'Estimate', exact: true }).click()
   await expect(page.getByPlaceholder('Food name (optional)')).toHaveValue(
     'Yogurt and oats',
@@ -176,13 +143,13 @@ test('offline food and todo saves survive reload then sync once connection retur
   const { database, errors } = await setup(page)
   await page.route('https://peak-test.supabase.co/**', (route) => route.abort())
   await page
-    .getByRole('button', { name: 'Open to-do list', exact: true })
+    .getByRole('button', { name: 'Open timeline', exact: true })
     .click()
   await page.getByLabel('Task', { exact: true }).fill('Offline task')
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
   await page.reload()
   await page
-    .getByRole('button', { name: 'Open to-do list', exact: true })
+    .getByRole('button', { name: 'Open timeline', exact: true })
     .click()
   await expect(page.getByText('Offline task', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
@@ -241,13 +208,13 @@ test.describe('installed app', () => {
     await context.setOffline(true)
     await page.reload()
     await page
-      .getByRole('button', { name: 'Open to-do list', exact: true })
+      .getByRole('button', { name: 'Open timeline', exact: true })
       .click()
     await page.getByLabel('Task', { exact: true }).fill('Offline PWA task')
     await page.getByRole('button', { name: 'Add task', exact: true }).click()
     await page.reload()
     await page
-      .getByRole('button', { name: 'Open to-do list', exact: true })
+      .getByRole('button', { name: 'Open timeline', exact: true })
       .click()
     await expect(
       page.getByText('Offline PWA task', { exact: true }),
@@ -269,7 +236,7 @@ test('activities can be created, edited, completed and deleted without routine c
   await page
     .getByLabel('Activity name', { exact: true })
     .fill('Stretching session')
-  await page.getByLabel('Activity time', { exact: true }).fill('18:00')
+  await page.getByLabel('Activity time', { exact: true }).fill('18:15')
   await page.getByRole('button', { name: 'Save activity', exact: true }).click()
   let activity = page
     .getByRole('article')
@@ -317,4 +284,28 @@ test('activities can be created, edited, completed and deleted without routine c
       exact: true,
     }),
   ).toBeVisible()
+})
+
+
+test('long saved food names stay inside the iPhone viewport and the form scrolls vertically', async ({ page }) => {
+  const { database } = await setup(page)
+  database.saved_meals.push(...Array.from({ length: 10 }, (_, i) => ({
+    id: `saved-${i}`, name: 'Very long breakfast with yogurt and oats and berries '.repeat(5),
+    calories: 400, protein_g: 30, carbs_g: 50, fat_g: 9,
+  })))
+  await page.reload()
+  await page.getByRole('button', { name: 'Open fuel', exact: true }).click()
+  const targets = page.getByText('120 g protein · four meals or snacks', { exact: true })
+  const meals = page.getByRole('heading', { name: "Today's meals" })
+  expect((await targets.boundingBox()).y).toBeGreaterThan((await meals.boundingBox()).y)
+  await page.getByRole('button', { name: 'Add food', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Log this food', exact: true })).toHaveCount(10)
+  const scroller = page.locator('[aria-hidden="false"]').filter({ has: page.getByRole('heading', { name: 'Add food', exact: true }) }).last()
+  const dimensions = await scroller.evaluate(el => ({ width: el.clientWidth, content: el.scrollWidth, height: el.clientHeight, contentHeight: el.scrollHeight }))
+  expect(dimensions.content).toBeLessThanOrEqual(dimensions.width + 1)
+  expect(dimensions.contentHeight).toBeGreaterThan(dimensions.height)
+  await page.getByPlaceholder('Food name (optional)').fill('A test meal')
+  await page.getByLabel('Calories', { exact: false }).fill('350')
+  await page.getByRole('button', { name: 'Log food · 350 kcal' }).click()
+  await expect(page.getByText('A test meal', { exact: true })).toBeVisible()
 })

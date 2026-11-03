@@ -143,7 +143,6 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         <label className="block mt-5 text-sm text-textSecondary">Night ending
           <input type="date" className="block rounded-xl bg-secondary p-3 mt-1" min={HISTORY_START} max={todayKey()} value={dayKey(viewDate)} onChange={e => { if (e.target.value) setDayOffset(Math.round((dayDate(e.target.value) - today) / 86400000)) }} />
         </label>
-        <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
           <Moon className="size-10 text-textMuted" />
           <p className="text-base font-medium text-textSecondary">No sleep data yet</p>
@@ -151,6 +150,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
             Sync your Garmin to see sleep and HRV here.
           </p>
         </div>
+        <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
       </div>
     )
     return (
@@ -253,7 +253,6 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
         </DayNavButton>
       </div>
 
-      <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
       {cur ? (
         <>
           <div className="mt-5 flex items-end gap-3">
@@ -313,6 +312,7 @@ export default function RecoveryCard({ expandedId, onExpand, onCollapse }) {
       )}
 
       <p className="mt-9 text-xs text-textMuted">Synced from Garmin Connect</p>
+      <ManualSleep key={dayKey(viewDate)} date={dayKey(viewDate)} />
     </div>
   )
 

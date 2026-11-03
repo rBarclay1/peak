@@ -20,7 +20,7 @@ import {
 } from '../src/lib/plan.js'
 import { mergeNutrition, acknowledge } from '../src/lib/nutritionQueue.js'
 
-test('19 explicit days with no training on November 3 except the easy run', () => {
+test('19 explicit days with a completed run and range session on November 3', () => {
   assert.equal(dates().length, 19)
   assert.equal(baseDay('2027-11-03').length, 0)
   assert.equal(
@@ -35,7 +35,7 @@ test('19 explicit days with no training on November 3 except the easy run', () =
 })
 test('base schedule has no overlapping timed blocks and protects actual commitments', () => {
   for (const date of dates()) {
-    const day = baseDay(date)
+    const day = baseDay(date).filter(t => !t.withinCommitment)
     for (let i = 1; i < day.length; i++)
       assert.ok(
         minutes(day[i - 1].time) + day[i - 1].duration <= minutes(day[i].time),
@@ -121,7 +121,8 @@ test('manual scheduling rejects conflicts, close climbing sessions and taper', (
   )
 })
 test('past dates do not imply completion', () => {
-  assert.equal(dayProgress(basePlan(), '2026-11-03').done, 0)
+  assert.equal(dayProgress(basePlan(), '2026-11-04').done, 0)
+  assert.equal(dayProgress(basePlan(), '2026-11-03').done, 1)
 })
 test('stable storage identity, safe legacy parsing and newer edits win', () => {
   const record = {
@@ -194,10 +195,10 @@ test('rapid updates have monotonic revisions and offline completion beats automa
 test('routine microsteps are gone and only activities count toward completion', () => {
   const day = baseDay('2026-11-03')
   assert.ok(
-    !day.some((t) => ['routine', 'sleep', 'meal', 'flex'].includes(t.type)),
+    !day.some((t) => ['routine', 'sleep', 'flex'].includes(t.type)),
   )
   assert.ok(!day.some((t) => /wake up|shower|drive/i.test(t.title)))
-  assert.equal(dayProgress(day, '2026-11-03').total, 1)
+  assert.equal(dayProgress(day, '2026-11-03').total, 8)
   const existing = patchRecord({}, '2026-11-03:run', {
     title: 'My easy run',
     duration: 15,
@@ -207,5 +208,5 @@ test('routine microsteps are gone and only activities count toward completion', 
     'My easy run',
   )
   const removed = patchRecord(existing, '2026-11-03:run', { deleted: true })
-  assert.equal(dayProgress(materialize(removed), '2026-11-03').total, 0)
+  assert.equal(dayProgress(materialize(removed), '2026-11-03').total, 7)
 })

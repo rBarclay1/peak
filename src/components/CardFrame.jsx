@@ -17,17 +17,13 @@ const HALF = 'var(--half)'
 // Reserve enough height for the weight summary independently of viewport size.
 // The remaining rows share the available space above it.
 const WEIGHT_HEIGHT = 'max(112px, 15%)'
-const FIRST_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.38)`
-const SECOND_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.74)`
+const FIRST_ROW_END = `calc((100% - ${WEIGHT_HEIGHT}) * 0.56)`
 const POSITIONS = {
   activity: { top: G, left: G, right: G, bottom: `calc(100% - ${FIRST_ROW_END} + ${HALF})` },
-  fuel: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(100% - ${SECOND_ROW_END} + ${HALF})` },
-  recovery: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(100% - ${SECOND_ROW_END} + ${HALF})` },
-  calendar: { top: `calc(${SECOND_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
-  todos: { top: `calc(${SECOND_ROW_END} + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
+  fuel: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: G, right: `calc(50% + ${HALF})`, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
+  recovery: { top: `calc(${FIRST_ROW_END} + ${HALF})`, left: `calc(50% + ${HALF})`, right: G, bottom: `calc(${WEIGHT_HEIGHT} + ${HALF})` },
   weight: { top: `calc(100% - ${WEIGHT_HEIGHT} + ${HALF})`, left: G, right: G, bottom: G },
 }
-
 const EXPANDED = { top: 0, left: 0, right: 0, bottom: 0 }
 
 export default function CardFrame({ id, expandedId, onExpand, onCollapse, preview, expanded, noScroll }) {
@@ -54,10 +50,10 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
   return (
     <div
       aria-hidden={hidden || undefined}
-      role={!isExpanded ? 'button' : undefined}
-      tabIndex={!isExpanded && !hidden ? 0 : -1}
-      aria-label={!isExpanded ? `Open ${id === 'activity' ? 'timeline' : id === 'recovery' ? 'sleep' : id === 'todos' ? 'to-do list' : id}` : undefined}
-      onKeyDown={e => { if (!isExpanded && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onExpand(id) } }}
+      role={!isExpanded && id !== 'activity' ? 'button' : undefined}
+      tabIndex={!isExpanded && !hidden && id !== 'activity' ? 0 : -1}
+      aria-label={!isExpanded && id !== 'activity' ? `Open ${id === 'activity' ? 'timeline' : id === 'recovery' ? 'sleep' : id === 'todos' ? 'to-do list' : id}` : undefined}
+      onKeyDown={e => { if (e.target === e.currentTarget && !isExpanded && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onExpand(id) } }}
       onClick={() => {
         if (!isExpanded) onExpand(id)
       }}
@@ -98,7 +94,7 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
       <div
         aria-hidden={!isExpanded || hidden}
         inert={!isExpanded || hidden ? "" : undefined}
-        className={`absolute inset-0 ${noScroll ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        className={`absolute inset-0 ${noScroll ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-y'}`}
         onTouchStart={isExpanded ? onTouchStart : undefined}
         onTouchEnd={isExpanded ? onTouchEnd : undefined}
         style={{
@@ -108,7 +104,7 @@ export default function CardFrame({ id, expandedId, onExpand, onCollapse, previe
         }}
       >
         <div
-          className="px-6 min-h-full"
+          className="px-6 min-h-full min-w-0 w-full"
           style={{
             paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',

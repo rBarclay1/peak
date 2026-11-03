@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import TopoBackground from '../components/TopoBackground.jsx'
-import TimelineCard, { TodoCard } from '../components/TimelineCard.jsx'
+import TimelineCard from '../components/TimelineCard.jsx'
 import RecoveryCard from '../components/RecoveryCard.jsx'
 import FuelCard from '../components/FuelCard.jsx'
-import CalendarCard from '../components/CalendarCard.jsx'
 import WeightCard from '../components/WeightCard.jsx'
 import { useNow } from '../hooks/useNow'
 import { todayKey, START, END, phase, dayDate } from '../lib/plan.js'
@@ -58,14 +57,6 @@ export default function Home() {
           />
           <FuelCard {...props} />
           <RecoveryCard {...props} />
-          <TodoCard {...props} />
-          <CalendarCard
-            {...props}
-            onSelectDay={(d) => {
-              setSelectedDate(d)
-              setExpandedId('activity')
-            }}
-          />
           <WeightCard {...props} />
         </div>
       </div>

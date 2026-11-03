@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const SCHEMA = {
   type: 'object',
   properties: {
-    name: { type: 'string', description: 'Short label for the food, e.g. "Eggs & toast"' },
+    name: { type: 'string', description: 'Concise meal title: 2–6 words, at most 48 characters, e.g. "Eggs & toast"' },
     calories: { type: 'number', description: 'Total kcal for the whole described amount' },
     protein_g: { type: 'number' },
     carbs_g: { type: 'number' },
@@ -21,8 +21,11 @@ const SCHEMA = {
 const SYSTEM = `You estimate nutrition macros from a free-text description of food someone ate.
 Assume standard/typical portion sizes and common preparation when details are missing.
 Estimate totals for the ENTIRE described amount (sum every item mentioned), not per-serving.
-Return whole numbers. Keep "name" to a short label. In "assumptions", briefly note any portion
-sizes or preparation you assumed, in one short phrase.`
+Return whole numbers. Summarize the meal in "name": 2–6 words and no more than 48 characters.
+Name the main foods or recognizable dish, e.g. "Chicken rice bowl", "Eggs & toast", or "Yogurt with berries".
+Do not copy the description, quantities, calorie counts, macro counts, or a long ingredient list into the name.
+The concise name must not affect nutrition totals: still include EVERY food and portion in the description.
+In "assumptions", briefly note any portion sizes or preparation you assumed, in one short phrase.`
 
 function readJson(req) {
   return new Promise((resolve) => {

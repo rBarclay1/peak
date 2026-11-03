@@ -43,7 +43,7 @@ export const shortDate = (date) =>
   dayDate(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const climbing = { '04': 70, '07': 80, '09': 80, 11: 75, 14: 65, 17: 40 }
 const running = { '03': 20, '06': 20, 10: 25, 13: 20 }
-const golf = { '05': 45, '08': 45, 12: 45, 15: 35 }
+const golf = { '03': 45, '05': 45, '08': 45, 12: 45, 15: 35 }
 export function trainingFor(date) {
   if (date < START || date > END) return null
   const d = date.slice(-2)
@@ -127,8 +127,11 @@ function block(
     ...extra,
   }
 }
+export function isTodoListItem(task) {
+  return task.type === 'todo' && (task.listOnly || !task.date || task.id.includes(':todo-'))
+}
 export function isActivity(task) {
-  return ['climb', 'golf', 'run', 'recovery', 'todo'].includes(task.type)
+  return !isTodoListItem(task) && ['climb', 'golf', 'run', 'recovery', 'todo', 'meal', 'study'].includes(task.type)
 }
 export function baseDay(date) {
   if (date < START || date > END) return []
@@ -163,6 +166,7 @@ export function baseDay(date) {
         'Easy morning run / run-walk',
         'run',
         'Conversational effort. Alternate jogging and walking if needed.',
+        { status: date === '2026-11-03' ? 'done' : 'planned' },
       ),
     )
   else
@@ -204,6 +208,14 @@ export function baseDay(date) {
         { deadline: END },
       ),
     )
+  blocks.push(
+    block(date, 'breakfast', '07:45', 25, 'Breakfast · protein + carbs', 'meal'),
+    block(date, 'lunch', '12:15', 30, 'Lunch · packed meal or lunch break', 'meal', '', { withinCommitment: work || dow === 2 }),
+    block(date, 'snack', '15:30', 10, 'Snack · fuel for the afternoon', 'meal', '', { withinCommitment: work || dow === 2 }),
+    block(date, 'dinner', '19:00', 30, 'Dinner · protein + carbs', 'meal'),
+    block(date, 'study', '20:15', 30, 'Schoolwork / personal project', 'study'),
+    block(date, 'mobility', '21:00', 15, 'Easy mobility / stretching', 'recovery'),
+  )
   return blocks.sort((a, b) => a.time.localeCompare(b.time))
 }
 export const basePlan = () => dates().flatMap(baseDay)
@@ -295,6 +307,8 @@ export function canPlace(task, date, time, records) {
     if (
       other.date === date &&
       other.type !== 'flex' &&
+      !other.withinCommitment &&
+      !isTodoListItem(other) &&
       other.time &&
       start < minutes(other.time) + other.duration &&
       end > minutes(other.time)

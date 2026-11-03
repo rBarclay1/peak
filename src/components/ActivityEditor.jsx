@@ -76,6 +76,8 @@ export default function ActivityEditor({
           onChange={(e) => field('type', e.target.value)}
         >
           <option value="todo">Other activity</option>
+          <option value="meal">Meal / snack</option>
+          <option value="study">Study / personal project</option>
           <option value="climb">Climbing</option>
           <option value="golf">Golf</option>
           <option value="run">Running</option>

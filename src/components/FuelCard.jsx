@@ -143,7 +143,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
       <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-3xl font-bold text-textPrimary">Fuel</h1>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {dayOffset !== 0 && (
               <button
                 type="button"
@@ -182,7 +182,6 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
           {r0(totals.calories).toLocaleString()} / {goals.calories.toLocaleString()} kcal · {dayLabel}
         </p>
 
-        <FuelPlan date={dateKey} totals={totals} logs={logs} syncStatus={syncStatus} retry={retry} />
         {/* Hero rings */}
         <div className="my-8 flex items-center justify-center gap-5" key={isExpanded ? 'open' : 'closed'}>
           <div className="flex flex-col items-center gap-2">
@@ -260,6 +259,7 @@ export default function FuelCard({ expandedId, onExpand, onCollapse }) {
             <Plus />
           </Button>
         </div>
+        <FuelPlan date={dateKey} totals={totals} logs={logs} syncStatus={syncStatus} retry={retry} />
       </div>
     )
 
@@ -506,7 +506,7 @@ function AddFood({ savedFoods, onLog, onSaveFood, onRemoveSaved, onDone, dayLabe
 // Labeled number input used in the manual-entry macro row.
 function NumField({ label, value, onChange, suffix, color }) {
   return (
-    <label className="flex-1">
+    <label className="min-w-0 flex-1">
       <span
         className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-textMuted"
         style={color ? { color } : undefined}
@@ -534,13 +534,13 @@ function NumField({ label, value, onChange, suffix, color }) {
 function SavedFoodRow({ food, onAdd, onRemove }) {
   return (
     <div className="flex items-center justify-between py-2.5">
-      <button type="button" onClick={onAdd} className="flex flex-1 items-center justify-between pr-3 text-left">
-        <span className="truncate text-[15px] font-medium text-textPrimary">{food.name}</span>
+      <button type="button" onClick={onAdd} className="flex min-w-0 flex-1 items-center justify-between pr-3 text-left">
+        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-textPrimary">{food.name}</span>
         <span className="ml-3 shrink-0 text-xs tabular-nums text-textMuted">
           {r0(food.calories)} kcal · {r0(food.protein_g)}P
         </span>
       </button>
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           onClick={onRemove}
@@ -569,7 +569,7 @@ function MealRow({ log, onRemove }) {
         <span className="block truncate text-[15px] font-medium text-textPrimary">{log.meal_name}</span>
         <span className="text-xs capitalize text-textMuted">{log.meal_type}</span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         <span className="text-right text-[11px] leading-tight tabular-nums text-textMuted">
           <span className="block font-semibold text-textSecondary">{r0(log.calories)} kcal</span>
           {r0(log.protein_g)}p · {r0(log.carbs_g)}c · {r0(log.fat_g)}f

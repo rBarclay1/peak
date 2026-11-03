@@ -15,6 +15,7 @@ import { useNow } from '../hooks/useNow'
 import {
   START,
   isActivity,
+  isTodoListItem,
   END,
   todayKey,
   shortDate,
@@ -103,8 +104,8 @@ export default function TimelineCard({
           {progress.done}/{progress.total} done
         </span>
       </div>
-      <div className="mt-3 flex-1 space-y-2 overflow-hidden">
-        {upcoming.slice(0, 3).map((task, i) => (
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-hidden">
+        {upcoming.slice(0, 2).map((task, i) => (
           <div key={task.id} className="flex gap-3 items-center">
             <span className="w-16 shrink-0 text-xs text-textSecondary">
               {formatTime(task.time)}
@@ -128,9 +129,10 @@ export default function TimelineCard({
           </p>
         )}
       </div>
-      <div className="mt-2 flex items-center justify-between text-xs text-textSecondary">
+      {cardProps.expandedId === null && <SimpleTodoList compact />}
+      <div className="mt-2 shrink-0 flex items-center justify-between text-xs text-textSecondary">
         <span>{phase(date)}</span>
-        <span>Open timeline →</span>
+        <button aria-label="Open timeline" className="py-1" onClick={() => cardProps.onExpand('activity')}>Open timeline →</button>
       </div>
     </div>
   )
@@ -451,6 +453,7 @@ export default function TimelineCard({
           )
         })}
       </div>
+      {cardProps.expandedId === 'activity' && <SimpleTodoList />}
       <p className="mt-6 text-xs leading-relaxed text-textSecondary">
         Unfinished training folds into a suitable later session without extra
         volume. Unfinished other activities return to your To-do list. Work and
@@ -468,277 +471,42 @@ export default function TimelineCard({
   )
 }
 
-export function TodoCard(cardProps) {
-  const { tasks, records, update, syncStatus } = usePlanner(),
-    today = todayKey()
-  const [title, setTitle] = useState(''),
-    [due, setDue] = useState(''),
-    [duration, setDuration] = useState(30),
-    [error, setError] = useState('')
-  const [showDone, setShowDone] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [removed, setRemoved] = useState(null)
-  const todos = tasks
-    .filter((t) => t.type === 'todo')
-    .sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'))
-  const pending = todos.filter((t) => !['done', 'skipped'].includes(t.status))
+function SimpleTodoList({ compact = false }) {
+  const { tasks, update } = usePlanner()
+  const [title, setTitle] = useState('')
+  const [completed, setCompleted] = useState(null)
+  const pending = tasks.filter(t => isTodoListItem(t) && !['done', 'skipped', 'moved'].includes(t.status))
   function add(e) {
     e.preventDefault()
     if (!title.trim()) return
-    if (editing) {
-      update(editing, {
-        title: title.trim(),
-        deadline: due || null,
-        duration: Number(duration),
-        date: null,
-        time: null,
-      })
-      setEditing(null)
-      setTitle('')
-      setDue('')
-      setError('')
-      return
-    }
-    const id = `${START}:todo-${crypto.randomUUID()}`
-    update(id, {
-      custom: true,
-      originalDate: START,
-      date: null,
-      time: null,
-      duration: Number(duration),
-      title: title.trim(),
-      deadline: due || null,
-      type: 'todo',
-      status: 'planned',
-      detail: '',
+    update(`${START}:todo-${crypto.randomUUID()}`, {
+      custom: true, listOnly: true, originalDate: START, date: null, time: null,
+      title: title.trim(), type: 'todo', status: 'planned', duration: 0,
     })
     setTitle('')
-    setDue('')
-    setError('')
   }
-  function schedule(task) {
-    for (
-      let day = today < START ? START : today;
-      day <= END && (!task.deadline || day <= task.deadline);
-      day = addDays(day, 1)
-    ) {
-      for (let time = 1185; time + task.duration <= 1275; time += 15) {
-        if (day === today) {
-          const current = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'America/New_York',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          }).format(new Date())
-          if (time < minutes(current)) continue
-        }
-        if (!canPlace(task, day, timeString(time), records)) {
-          update(task.id, {
-            ...task,
-            date: day,
-            time: timeString(time),
-            reason: null,
-          })
-          setError('')
-          return
-        }
-      }
-    }
-    setError(
-      'No free evening slot before this deadline. The task stays in your list; adjust its due date or duration.',
-    )
-  }
-  const preview = (
-    <div className="h-full flex flex-col justify-between">
-      <div className="flex justify-between items-center">
-        <span className="text-xs uppercase font-semibold tracking-wider text-textSecondary">
-          To-do list
-        </span>
-        <Plus size={16} className="text-yellow" />
-      </div>
-      <p className="text-xl font-bold">{pending.length} open</p>
-      <p className="text-xs text-textSecondary truncate">
-        {pending[0]?.title || 'Add something to get done'}
-      </p>
-    </div>
-  )
-  const expanded = (
-    <div>
-      <p className="text-xs uppercase tracking-widest text-yellow">
-        Make room for the rest
-      </p>
-      <h1 className="text-3xl font-bold mt-1">To-do list</h1>
-      <p className="text-sm text-textSecondary mt-2">
-        Add anything. Keep it here, or find an evening slot in your day.
-      </p>
-      <form onSubmit={add} className="mt-6 space-y-3">
-        <label className="block text-sm">
-          Task
-          <input
-            className={inputClass}
-            maxLength={200}
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Finish assignment"
-          />
-        </label>
-        <div className="flex gap-3">
-          <label className="min-w-0 flex-1 text-sm">
-            Due date · optional
-            <input
-              className={inputClass}
-              type="date"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-            />
-          </label>
-          <label className="w-24 text-sm">
-            Minutes
-            <input
-              className={inputClass}
-              type="number"
-              min="5"
-              max="90"
-              step="5"
-              required
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            />
-          </label>
-        </div>
-        <button className={`${actionClass} w-full text-yellow`}>
-          <Plus size={16} className="inline mr-1" />{' '}
-          {editing ? 'Save task' : 'Add task'}
-        </button>
-        {editing && (
-          <button
-            type="button"
-            className={actionClass}
-            onClick={() => {
-              setEditing(null)
-              setTitle('')
-              setDue('')
-            }}
-          >
-            Cancel edit
-          </button>
-        )}
-      </form>
-      {error && (
-        <p role="alert" className="text-sm text-orange mt-3">
-          {error}
-        </p>
-      )}
-      <div className="mt-6 space-y-3">
-        {(showDone ? todos : pending).map((task) => (
-          <article
-            key={task.id}
-            className="rounded-2xl border border-border p-4"
-          >
-            <div className="flex gap-3 items-start">
-              <button
-                aria-label={`${task.status === 'done' ? 'Reopen' : 'Complete'} todo: ${task.title}`}
-                className="size-11 shrink-0 rounded-full bg-secondary grid place-items-center"
-                onClick={() =>
-                  update(task.id, {
-                    status: task.status === 'done' ? 'planned' : 'done',
-                  })
-                }
-              >
-                {task.status === 'done' ? (
-                  <Check className="text-exercise" />
-                ) : (
-                  <Circle size={20} />
-                )}
-              </button>
-              <div>
-                <p
-                  className={`font-semibold ${task.status === 'done' ? 'line-through text-textSecondary' : ''}`}
-                >
-                  {task.title}
-                </p>
-                <p
-                  className={`mt-1 text-xs ${task.deadline && task.deadline < today && task.status !== 'done' ? 'text-orange' : 'text-textSecondary'}`}
-                >
-                  {task.duration} min
-                  {task.deadline
-                    ? ` · Due ${shortDate(task.deadline)}`
-                    : ' · No deadline'}
-                </p>
-                {task.date && (
-                  <p className="text-xs text-cyan mt-1">
-                    {shortDate(task.date)} · {formatTime(task.time)}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {task.status !== 'done' && (
-                <button
-                  className={actionClass}
-                  onClick={() =>
-                    task.date
-                      ? update(task.id, { date: null, time: null })
-                      : schedule(task)
-                  }
-                >
-                  {task.date ? 'Back to list' : 'Find a time'}
-                </button>
-              )}
-              <button
-                className={actionClass}
-                onClick={() => {
-                  setEditing(task.id)
-                  setTitle(task.title)
-                  setDue(task.deadline || '')
-                  setDuration(task.duration)
-                }}
-              >
-                Edit
-              </button>
-              <button
-                className={actionClass}
-                onClick={() => {
-                  setRemoved(task.id)
-                  update(task.id, { deleted: true })
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      {removed && (
-        <button
-          className={`${actionClass} mt-4`}
-          onClick={() => {
-            update(removed, { deleted: false })
-            setRemoved(null)
-          }}
-        >
-          Undo delete
-        </button>
-      )}
-      {!pending.length && (
-        <p className="my-6 text-textSecondary">Your list is clear.</p>
-      )}
-      <button
-        className={`${actionClass} mt-4`}
-        onClick={() => setShowDone(!showDone)}
-      >
-        {showDone ? 'Hide completed' : 'Show completed'}
-      </button>
-      <p className="text-xs text-textSecondary mt-4">{syncStatus}</p>
-    </div>
-  )
   return (
-    <CardFrame
-      id="todos"
-      {...cardProps}
-      preview={preview}
-      expanded={expanded}
-    />
+    <section aria-label="To-do list" className={`${compact ? 'mt-3 shrink-0' : 'mt-8'} border-t border-border pt-3 min-h-0 flex flex-col`}
+      onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-textSecondary">To-do list · {pending.length}</h2>
+      <form onSubmit={add} className="mt-2 flex gap-2">
+        <input aria-label="Task" value={title} onChange={e => setTitle(e.target.value)} maxLength={200}
+          placeholder="Add a task…" className="min-w-0 flex-1 rounded-xl bg-secondary px-3 py-2 text-base" />
+        <button aria-label="Add task" disabled={!title.trim()} className={`${actionClass} text-yellow`}><Plus size={18} /></button>
+      </form>
+      <ul className={`${compact ? 'max-h-11 overflow-y-auto overscroll-contain' : ''} mt-1`}>
+        {pending.map(task => (
+          <li key={task.id}>
+            <button aria-label={`Complete todo: ${task.title}`} className="flex min-h-11 w-full items-center gap-3 py-2 text-left text-sm"
+              onClick={() => { setCompleted(task); update(task.id, { status: 'done' }) }}>
+              <Circle size={18} className="shrink-0 text-textMuted" />
+              <span className="min-w-0 break-words">{task.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {!pending.length && !compact && <p className="mt-3 text-sm text-textSecondary">All clear. Add anything you need to do.</p>}
+      {completed && <button className="mt-1 text-xs text-yellow text-left min-h-8" onClick={() => { update(completed.id, { status: completed.status }); setCompleted(null) }}>Undo task completion</button>}
+    </section>
   )
 }

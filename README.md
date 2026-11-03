@@ -23,12 +23,15 @@ reloads. They never write to the production account.
 
 The timeline tracks climbing, running, golf, mobility, and scheduled tasks. Work
 and class remain as non-checkable context. Wake-up, shower, travel, and other
-routine microsteps are omitted; food and sleep stay in their own trackers. Add
+routine microsteps are omitted. Meals, study, and mobility appear in the day;
+food and sleep retain their detailed trackers. Add
 activities or edit their names, types, dates, times, durations, notes, and
-checklists. Check off, mark partial completion, move, skip, delete, or undo. The To-do list supports optional
-deadlines, editing, completion, deletion with undo, and finding a free evening slot.
+checklists. Check off, mark partial completion, move, skip, delete, or undo. The simple To-do list sits below the schedule in Your Day: add text, check a task
+off to hide it, and undo an accidental completion. Existing tasks are preserved.
+The separate November Plan and To-do tiles have been removed.
 Dates, session details, schedule constraints and nutrition defaults live in
-`src/lib/plan.js`. Fuel targets can be edited in the app. The initial targets are
+`src/lib/plan.js`. Fuel targets can be edited below the food log; sleep routine settings sit below
+sleep data. Macro estimates also return short, editable meal titles. The initial targets are
 120 g protein and a provisional 2,550 kcal; shortfalls do not accumulate as debt.
 
 Missed training folds into the next suitable session without adding volume. The
